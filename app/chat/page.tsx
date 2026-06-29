@@ -6,222 +6,65 @@ import { useSession } from 'next-auth/react'
 import LoginTransition from '@/components/LoginTransition'
 import ProjectsPage from '@/components/ProjectsPage'
 import { useSmartSuggestions, trackMessage } from '@/hooks/useSmartSuggestions'
-import { ArrowUp, Paperclip, FolderOpen, X, Search, StopCircle } from 'lucide-react'
+import { ArrowUp, Paperclip, X, Search, StopCircle, Download } from 'lucide-react'
 import ModelViewer, { ModelType, ShapeDimensions } from '@/components/viewer/ModelViewer'
 import Sidebar, { SIDEBAR_EXPANDED, SIDEBAR_COLLAPSED, ThemePreference } from '@/components/sidebar/Sidebar'
 
 const F = "'Neue Montreal', 'Helvetica Neue', Helvetica, Arial, sans-serif"
+const CHAT_API = 'https://web-production-9f493.up.railway.app/chat'
+const CONVERSATIONS_API = 'https://web-production-9f493.up.railway.app/conversations'
+
+interface Conversation {
+  id: string
+  title: string
+  updated_at: string
+}
 
 interface Message { role: 'user' | 'assistant'; lines: string[]; visibleLines: number }
 
-// ── Pharma table/chair conversational flow ────────────────────────────────
-interface PharmaFlow {
-  type: 'table' | 'chair'
-  step: 'length' | 'width' | 'height' | 'chairs' | 'grade' | 'done'
-  length?: number
-  width?: number
-  height?: number
-  chairs?: number
-  grade?: string
+interface CadUrls {
+  stl_url: string | null
+  step_url: string | null
+  dxf_url: string | null
 }
 
-const PHARMA_QUESTIONS: Record<string, string> = {
-  length: `What length do you need for the table? (standard pharma plant tables are 1200–2400 mm)`,
-  width:  `What width? (standard range: 600–900 mm for single-sided workbenches, 900–1200 mm for double-sided)`,
-  height: `What working height? (standard GMP height is 900 mm, adjustable-leg versions go 700–1100 mm)`,
-  chairs: `How many chairs to pair with this table? (or 0 for table only)`,
-  grade:  `Which stainless steel grade — 304 (general use) or 316L (higher corrosion resistance, recommended for wet areas and API contact)?`,
+interface AssistantMessage extends Message {
+  role: 'assistant'
+  cadUrls?: CadUrls
+}
+type ChatMessage = Message | AssistantMessage
+
+function DownloadButtons({ urls, darkMode }: { urls: CadUrls; darkMode: boolean }) {
+  const border = darkMode ? '#2e3847' : '#e0e0e0'
+  const textMuted = darkMode ? '#6e7681' : '#999999'
+  const textPrimary = darkMode ? '#e6edf3' : '#0a0a0a'
+  const buttons = [
+    { label: 'STL',  url: urls.stl_url  },
+    { label: 'STEP', url: urls.step_url },
+    { label: 'DXF',  url: urls.dxf_url  },
+  ].filter(b => b.url)
+  if (buttons.length === 0) return null
+  return (
+    <div style={{ display: 'flex', gap: '8px', marginTop: '10px', flexWrap: 'wrap' }}>
+      {buttons.map(({ label, url }) => (
+        <a key={label} href={url!} download target="_blank" rel="noopener noreferrer"
+          style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 12px', borderRadius: '6px', border: `1px solid ${border}`, backgroundColor: 'transparent', fontSize: '11px', fontWeight: 500, fontFamily: F, color: textMuted, textDecoration: 'none', transition: 'color 0.15s, border-color 0.15s', cursor: 'pointer' }}
+          onMouseEnter={e => { const el = e.currentTarget as HTMLAnchorElement; el.style.color = textPrimary; el.style.borderColor = darkMode ? '#4a5568' : '#aaa' }}
+          onMouseLeave={e => { const el = e.currentTarget as HTMLAnchorElement; el.style.color = textMuted; el.style.borderColor = border }}
+        >
+          <Download size={11} />{label}
+        </a>
+      ))}
+    </div>
+  )
 }
 
-const PHARMA_TABLE_RESPONSE = (flow: PharmaFlow) => `Here is your pharma-grade stainless steel workstation.
-Table dimensions: ${flow.length} mm L × ${flow.width} mm W × ${flow.height} mm H.
-Material: ${flow.grade} stainless steel, 2B finish (Ra ≤ 0.8 μm) — compliant with GMP/cGMP requirements.
-Coved internal corners — no dead zones for bacterial growth, cleanable without disassembly.
-Welded tubular legs with adjustable feet (±25 mm) for levelling on uneven floors.
-Undershelf optional — 304 SS mesh or solid sheet, same finish.
-${(flow.chairs ?? 0) > 0 ? `${flow.chairs} cleanroom chair(s) included — 304 SS frame, perforated seat/back, footrest ring, ESD-safe castors.` : 'Table only configuration — no chairs.'}
-Load capacity: 200 kg UDL on tabletop surface.
-All welds are continuous and ground flush — no crevices for contamination.
-Compliant with FDA 21 CFR Part 211, EU GMP Annex 1, and ISO 14644 cleanroom standards.`
-
-const RESPONSES: Record<string, string> = {
-  spur_gear: `Here is your spur gear model.
-Spur gears are the most common gear type with straight teeth parallel to the rotation axis.
-Teeth count: 20, Module: 2.0 mm, Pitch diameter: 40 mm.
-Material: 4140 chromoly steel, heat-treated to 58 HRC.
-Max recommended tangential load: 3.8 kN at the pitch circle.
-Pressure angle: 20 degrees — the industry standard for most applications.`,
-  helical_gear: `Here is your helical gear model.
-Helical gears run quieter than spur gears due to gradual tooth engagement.
-Teeth count: 18, Helix angle: 20 degrees, Normal module: 2.0 mm.
-Material: 4140 chromoly steel.
-The helical geometry produces axial thrust — thrust bearings are required on the shaft.
-Recommended for applications above 1500 RPM where noise is a concern.`,
-  shaft: `Here is your shaft model with shoulders and keyway.
-Shaft diameter: 64 mm, Material: 1045 medium carbon steel, ground finish Ra 0.8 um.
-The two shoulders locate bearings axially — interference fit H7/p6 recommended.
-Keyway dimensions (DIN 6885): 12 x 8 x 50 mm for torque transmission.
-At 3000 RPM with 80 Nm bending moment, safety factor = 2.66 — well within limits.`,
-  materials: `Material comparison: 4140 Chromoly Steel vs 316 Stainless Steel for a marine pump shaft.
-4140 Chromoly — Yield strength: 655 MPa, UTS: 850 MPa, Hardness: 28 HRC, cost: low.
-4140 Chromoly — Corrosion resistance: poor in saltwater without coating.
-316 Stainless — Yield strength: 310 MPa, UTS: 620 MPa, Hardness: 18 HRC, cost: high.
-316 Stainless — Corrosion resistance: excellent in marine environments.
-Verdict: for a marine pump shaft, 316 stainless is strongly recommended despite lower strength.
-Saltwater corrosion will destroy uncoated 4140 within months — the strength advantage is irrelevant.
-If high strength is critical, consider duplex 2205 stainless (yield 450 MPa, excellent marine resistance).`,
-  physics: `Von Mises stress analysis — 64mm shaft at 3000 RPM, torque 120 Nm, bending 80 Nm.
-Shear stress from torque: tau = 16T divided by pi x d cubed = 14.7 MPa.
-Bending stress: sigma_b = 32M divided by pi x d cubed = 19.6 MPa.
-Von Mises stress: sigma_vm = sqrt(sigma_b squared + 3 x tau squared) = 32.1 MPa.
-Material: 1045 steel, yield strength Sy = 530 MPa.
-Safety factor: n = 530 divided by 32.1 = 16.5 — extremely safe at this diameter.
-Fatigue check using Goodman criterion: alternating stress 32.1 MPa vs endurance limit 265 MPa — passes.
-This shaft is well within safe operating limits. No design changes needed.`,
-  bearing: `Here is your deep groove ball bearing model.
-Type: 6308 deep groove ball bearing, 10 balls, 52100 bearing steel.
-Bore: 40 mm, Outer diameter: 90 mm, Width: 23 mm.
-Dynamic load rating C: 42 kN, Static load rating C0: 24 kN.
-Max speed: 6000 RPM with grease lubrication.
-Suitable for radial and moderate axial loads in both directions.`,
-  bolt: `Here is your M12 hex bolt model.
-Standard: ISO 4014, Grade 8.8 alloy steel, zinc-plated.
-Thread: M12 x 1.75 mm pitch, shank length 60 mm.
-Proof load: 58.8 kN, Ultimate tensile load: 91.4 kN.
-Recommended torque: 85 Nm with lubricated threads.
-Use Grade 10 washers and prevailing-torque nuts for critical joints.`,
-  cube: `Here is your cube model.
-A perfect regular hexahedron — all six faces are equal squares.
-Volume equals side cubed, Surface area equals 6 times side squared.
-Material: structural steel (E = 200 GPa).
-Would you like a stress analysis under a specific load case?`,
-  rectangle: `Here is your rectangular box model.
-Volume equals width times height times depth.
-Material: structural steel (E = 200 GPa).
-Ideal geometry for housing, bracket, or enclosure design.
-Would you like wall thickness or bending stress calculations?`,
-  sphere: `Here is your sphere model.
-Volume equals 4/3 times pi times r cubed. Surface area equals 4 times pi times r squared.
-A sphere has no stress concentrations under uniform internal pressure.
-Material: structural steel. Ideal for pressure vessels or bearing balls.`,
-  cylinder: `Here is your cylinder model.
-Volume equals pi times r squared times h. Surface area equals 2 times pi times r times (r + h).
-Used extensively in shafts, pressure vessels, and hydraulic actuators.
-Material: structural steel. Would you like torsion or bending stress analysis?`,
-  fatigue: `Fatigue life analysis — 42CrMo4 steel shaft, fully reversed bending 180 MPa at 2800 RPM.
-Material properties: UTS = 1000 MPa, Yield = 850 MPa, Brinell hardness 300 HB.
-Endurance limit estimate (Marin equation): Se' = 0.5 x UTS = 500 MPa.
-Surface factor ka = 0.72 (machined finish), Size factor kb = 0.85 (shaft Ø > 50mm).
-Reliability factor kc = 0.868 (99% reliability), Temperature factor kd = 1.0.
-Modified endurance limit: Se = 0.72 x 0.85 x 0.868 x 500 = 265 MPa.
-Goodman criterion: sigma_a / Se + sigma_m / UTS = 1 (fully reversed, sigma_m = 0).
-Safety factor: n = Se / sigma_a = 265 / 180 = 1.47 — marginal, borderline safe.
-Basquin equation for finite life: N = (sigma_a / sigma_f')^(1/b).
-sigma_f' = 1.5 x UTS = 1500 MPa, b = -0.085 (steel).
-Cycles to failure: N = (180 / 1500)^(1 / -0.085) = 387,000 cycles.
-At 2800 RPM, time to failure: 387,000 / 2800 = 138 minutes of continuous operation.
-Recommendation: increase shaft diameter or use shot peening to raise endurance limit.
-A safety factor below 2.0 is not recommended for rotating machinery.`,
-  heatmap: `Stress heatmap activated — simulated FEA analysis displayed on the model.
-Red zones indicate critical stress concentrations — highest risk of fatigue failure.
-Orange zones show high stress areas — monitor under cyclic loading conditions.
-Yellow zones are medium stress — generally safe but worth noting under peak loads.
-Green zones are low stress — structurally sound under normal operating conditions.
-Note: this is a simulated heatmap for visualisation purposes.
-Real FEA analysis will be available when the MecAI compute backend is connected.
-Always verify with certified FEA software before manufacturing critical components.`,
-  default: `I have received your request.
-MecAI can generate spur gears, helical gears, shafts, bearings, bolts, basic shapes, and pharma-grade stainless steel furniture.
-Try: generate a spur gear, show me a bolt, make a pharma table, or design a cleanroom chair.`,
-}
-
-function getResponse(input: string): string {
-  const l = input.toLowerCase()
-  if (l.includes('spur')) return RESPONSES.spur_gear
-  if (l.includes('helical')) return RESPONSES.helical_gear
-  if (l.includes('material') || l.includes('chromoly') || l.includes('marine')) return RESPONSES.materials
-  if (l.includes('fatigue') || l.includes('goodman') || l.includes('cycles to failure') || l.includes('fatigue life') || l.includes('basquin')) return RESPONSES.fatigue
-  if (l.includes('von mises') || l.includes('physics') || l.includes('stress') || l.includes('torque') || l.includes('bending') || l.includes('safe')) return RESPONSES.physics
-  if (l.includes('shaft')) return RESPONSES.shaft
-  if (l.includes('bearing')) return RESPONSES.bearing
-  if (l.includes('bolt') || l.includes('screw') || l.includes('fastener')) return RESPONSES.bolt
-  if (l.includes('cube') || l.includes('square block')) return RESPONSES.cube
-  if (l.includes('rectangle') || l.includes('cuboid') || l.includes('rectangular box')) return RESPONSES.rectangle
-  if (l.includes('box') && !l.includes('gear')) return RESPONSES.rectangle
-  if (l.includes('sphere') || l.includes('ball')) return RESPONSES.sphere
-  if (l.includes('cylinder')) return RESPONSES.cylinder
-  if (l.includes('gear')) return RESPONSES.spur_gear
-  return RESPONSES.default
-}
-
-function getModelType(input: string): ModelType | null {
-  const l = input.toLowerCase()
-  const hasGenerateIntent = l.includes('generate') || l.includes('show') || l.includes('create') || l.includes('make') || l.includes('draw') || l.includes('build') || l.includes('model') || l.includes('design')
-  if (!hasGenerateIntent) return null
-  if (l.includes('spur') || (l.includes('gear') && !l.includes('gearbox'))) return 'spur_gear'
-  if (l.includes('helical')) return 'helical_gear'
-  if (l.includes('shaft')) return 'shaft'
-  if (l.includes('bearing')) return 'bearing'
-  if (l.includes('bolt') || l.includes('screw') || l.includes('fastener')) return 'bolt'
-  if (l.includes('cube') || l.includes('square')) return 'cube'
-  if (l.includes('rectangle') || l.includes('cuboid') || l.includes('box')) return 'rectangle'
-  if (l.includes('sphere') || l.includes('ball')) return 'sphere'
-  if (l.includes('cylinder')) return 'cylinder'
-  return null
-}
-
-function parseDimensions(input: string): ShapeDimensions {
-  const nums = [...input.matchAll(/(\d+(?:\.\d+)?)\s*(?:mm|cm|m)?/g)].map(m => parseFloat(m[1]))
-  const l = input.toLowerCase()
-  if (l.includes('cube') || l.includes('square block')) return { width: nums[0] ?? 100 }
-  if (l.includes('rectangle') || l.includes('box') || l.includes('cuboid')) return { width: nums[0] ?? 200, height: nums[1] ?? 100, depth: nums[2] ?? 80 }
-  if (l.includes('sphere') || l.includes('ball')) return { radius: nums[0] ?? 80 }
-  if (l.includes('cylinder')) return { radius: nums[0] ?? 50, length: nums[1] ?? 200 }
-  if (l.includes('shaft')) return { radius: (nums[0] ?? 22) / 2, length: nums[1] ?? 300 }
-  return {}
-}
+// Conversations loaded from backend — replaces static ALL_CHATS
+const EMPTY_CHATS: { id: string; title: string; time: string }[] = []
 
 function splitLines(text: string): string[] {
   return text.split(/(?<=\.)\s+/).filter(l => l.trim().length > 0)
 }
-
-function extractNumber(input: string): number | null {
-  const m = input.match(/(\d+(?:\.\d+)?)/)
-  return m ? parseFloat(m[1]) : null
-}
-
-function isPharmaIntent(input: string): boolean {
-  const l = input.toLowerCase()
-  return (l.includes('table') || l.includes('chair') || l.includes('workbench') || l.includes('bench') || l.includes('stool')) &&
-    (l.includes('pharma') || l.includes('stainless') || l.includes('cleanroom') || l.includes('gmp') || l.includes('316') || l.includes('304') || l.includes('plant') || l.includes('lab') || l.includes('laboratory'))
-}
-
-const PHARMA_CHAIR_RESPONSE = (flow: PharmaFlow) => `Here is your pharma-grade stainless steel cleanroom chair.
-Seat height: ${flow.height ?? 450}–${(flow.height ?? 450) + 200} mm (adjustable gas lift).
-Material: ${flow.grade ?? '304'} stainless steel frame, 2B finish Ra ≤ 0.8 μm.
-Perforated seat and backrest — no dead zones, fully cleanable, compliant with ISO 14644.
-Swivel base with ESD-safe castors — suitable for cleanroom and controlled environments.
-Footrest ring: 304 SS tubular, welded and polished flush.
-Compliant with GMP Annex 1, FDA 21 CFR Part 211, and ISO Class 5–8 cleanrooms.
-Weight capacity: 120 kg. Dimensions: 450 mm seat width, 450 mm seat depth.`
-
-function isHeatmapIntent(input: string): boolean {
-  const l = input.toLowerCase()
-  return l.includes('heatmap') || l.includes('heat map') ||
-    l.includes('stress') || l.includes('weak') || l.includes('strong') ||
-    l.includes('failure') || l.includes('fea') || l.includes('stress distribution') ||
-    l.includes('where') && (l.includes('fail') || l.includes('break') || l.includes('stress')) ||
-    l.includes('show me the stress') || l.includes('stress analysis') ||
-    l.includes('load distribution') || l.includes('structural analysis')
-}
-
-const ALL_CHATS = [
-  { id: '1', title: 'Helical gear 48T design', time: '2m ago' },
-  { id: '2', title: 'Spur gear module 2.5',    time: '1h ago' },
-  { id: '3', title: 'Shaft stress analysis',   time: '3h ago' },
-  { id: '4', title: 'Ball bearing selection',  time: 'Yesterday' },
-  { id: '5', title: 'M16 bolt torque calc',    time: 'Yesterday' },
-]
 
 function AppWordmark({ darkMode, onClick }: { darkMode: boolean; onClick?: () => void }) {
   return (
@@ -327,12 +170,13 @@ function InputBar({ input, onChange, onKeyDown, onSend, onStop, isStreaming, pla
 
 interface SearchPanelProps {
   open: boolean; query: string; onChange: (v: string) => void; onClose: () => void
-  chats: typeof ALL_CHATS; surface: string; border: string; textPrimary: string
+  chats: { id: string; title: string; time: string }[]; surface: string; border: string; textPrimary: string
   textMuted: string; darkMode: boolean; inputRef: React.RefObject<HTMLInputElement>
   sidebarWidth: number; viewerWidth: number; viewerOpen: boolean
+  onSelectChat: (id: string) => void
 }
 
-function SearchPanel({ open, query, onChange, onClose, chats, surface, border, textPrimary, textMuted, darkMode, inputRef }: SearchPanelProps) {
+function SearchPanel({ open, query, onChange, onClose, chats, surface, border, textPrimary, textMuted, darkMode, inputRef, onSelectChat }: SearchPanelProps) {
   const filtered = query ? chats.filter(c => c.title.toLowerCase().includes(query.toLowerCase())) : chats
   return (
     <>
@@ -351,7 +195,7 @@ function SearchPanel({ open, query, onChange, onClose, chats, surface, border, t
             {filtered.length === 0
               ? <p style={{ fontSize: '13px', fontWeight: 300, color: textMuted, fontFamily: F, padding: '8px 10px', margin: 0 }}>No chats found for &quot;{query}&quot;</p>
               : filtered.map(chat => (
-                <button key={chat.id} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 10px', borderRadius: '6px', border: 'none', backgroundColor: 'transparent', cursor: 'pointer', textAlign: 'left', transition: 'background-color 0.15s' }}
+                <button key={chat.id} onClick={() => { onSelectChat(chat.id); onClose() }} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 10px', borderRadius: '6px', border: 'none', backgroundColor: 'transparent', cursor: 'pointer', textAlign: 'left', transition: 'background-color 0.15s' }}
                   onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }}
                   onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent' }}>
                   <span style={{ fontSize: '13px', fontWeight: 300, color: textPrimary, fontFamily: F }}>{chat.title}</span>
@@ -373,7 +217,7 @@ export default function ChatPage() {
   const firstName = userName.split(' ')[0]
 
   const [input, setInput] = useState('')
-  const [messages, setMessages] = useState<Message[]>([])
+  const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [viewerOpen, setViewerOpen] = useState(false)
   const [viewerWidth, setViewerWidth] = useState(480)
@@ -390,9 +234,8 @@ export default function ChatPage() {
   const [shapeDims, setShapeDims] = useState<ShapeDimensions>({})
   const [isGenerating, setIsGenerating] = useState(false)
   const [chatKey, setChatKey] = useState(0)
-
-  // ── Pharma conversational flow state ──
-  const [pharmaFlow, setPharmaFlow] = useState<PharmaFlow | null>(null)
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null)
+  const [conversations, setConversations] = useState<{ id: string; title: string; time: string }[]>([])
 
   const { cards: promptCards, isPersonalised } = useSmartSuggestions()
 
@@ -451,7 +294,55 @@ export default function ChatPage() {
     }
   }, [])
 
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+  // ── Load conversation history from backend ──
+  useEffect(() => {
+    if (!session?.user?.id) return
+    fetch(`${CONVERSATIONS_API}/${session.user.id}`)
+      .then(r => r.ok ? r.json() : [])
+      .then((data: Conversation[]) => {
+        if (!Array.isArray(data)) return
+        const formatted = data.map(c => ({
+          id: c.id,
+          title: c.title ?? 'Untitled conversation',
+          time: formatConversationTime(c.updated_at),
+        }))
+        setConversations(formatted)
+      })
+      .catch(() => {}) // silently fail — sidebar just stays empty
+  }, [session?.user?.id])
+
+  function formatConversationTime(iso: string): string {
+    if (!iso) return ''
+    const diff = Date.now() - new Date(iso).getTime()
+    const mins = Math.floor(diff / 60000)
+    if (mins < 1)   return 'Just now'
+    if (mins < 60)  return `${mins}m ago`
+    const hrs = Math.floor(mins / 60)
+    if (hrs < 24)   return `${hrs}h ago`
+    const days = Math.floor(hrs / 24)
+    if (days === 1) return 'Yesterday'
+    return `${days}d ago`
+  }
+
+  // ── Load a specific conversation by ID ──
+  const loadConversation = useCallback(async (conversationId: string) => {
+    if (!session?.user?.id) return
+    try {
+      const res = await fetch(`${CONVERSATIONS_API}/${session.user.id}/${conversationId}`)
+      if (!res.ok) return
+      const data = await res.json()
+      // data.messages: [{ role, content }]
+      if (!Array.isArray(data.messages)) return
+      const loaded: ChatMessage[] = data.messages.map((m: { role: string; content: string }) => ({
+        role: m.role as 'user' | 'assistant',
+        lines: m.role === 'assistant' ? splitLines(m.content) : [m.content],
+        visibleLines: m.role === 'assistant' ? splitLines(m.content).length : 1,
+      }))
+      setMessages(loaded)
+      setCurrentConversationId(conversationId)
+      setChatKey(k => k + 1)
+    } catch {}
+  }, [session?.user?.id])
   useEffect(() => { if (searchOpen) setTimeout(() => searchInputRef.current?.focus(), 60) }, [searchOpen])
   useEffect(() => {
     const fn = (e: KeyboardEvent) => { if (e.key === 'Escape') { setSearchOpen(false); setSearchQuery('') } }
@@ -484,121 +375,105 @@ export default function ChatPage() {
     setIsGenerating(false); setActiveModel(model)
   }, [])
 
-  // ── Stream lines to the last assistant message ──
-  const streamLines = useCallback(async (lines: string[]) => {
-    setIsStreaming(true); abortRef.current = false
-    for (let i = 0; i < lines.length; i++) {
-      if (abortRef.current) break
-      await new Promise(r => setTimeout(r, i === 0 ? 280 : 380))
-      setMessages(prev => { const u = [...prev]; const l = { ...u[u.length - 1] }; l.visibleLines = i + 1; u[u.length - 1] = l; return u })
-    }
-    setIsStreaming(false)
-  }, [])
-
-  // ── Add an assistant message ──
-  const addAssistant = useCallback((text: string) => {
-    const lines = splitLines(text)
-    setMessages(prev => [...prev, { role: 'assistant', lines, visibleLines: 0 }])
-    return lines
-  }, [])
-
+  // ── Core sendMessage: calls /chat endpoint ──
   const sendMessage = useCallback(async (text: string) => {
     const trimmed = text.trim()
     if (!trimmed || isStreaming) return
     setInput('')
 
-    // ── Pharma flow: handle ongoing Q&A ──
-    if (pharmaFlow && pharmaFlow.step !== 'done') {
-      setMessages(prev => [...prev, { role: 'user', lines: [trimmed], visibleLines: 1 }])
-      const num = extractNumber(trimmed)
-      const l = trimmed.toLowerCase()
-      let next = { ...pharmaFlow }
-
-      if (next.step === 'length') {
-        next.length = num ?? 1800
-        next.step = 'width'
-        const lines = addAssistant(PHARMA_QUESTIONS.width)
-        setPharmaFlow(next)
-        await streamLines(lines)
-      } else if (next.step === 'width') {
-        next.width = num ?? 750
-        next.step = 'height'
-        const lines = addAssistant(PHARMA_QUESTIONS.height)
-        setPharmaFlow(next)
-        await streamLines(lines)
-      } else if (next.step === 'height') {
-        next.height = num ?? (next.type === 'chair' ? 450 : 900)
-        next.step = next.type === 'table' ? 'chairs' : 'grade'
-        const q = next.type === 'table' ? PHARMA_QUESTIONS.chairs : PHARMA_QUESTIONS.grade
-        const lines = addAssistant(q)
-        setPharmaFlow(next)
-        await streamLines(lines)
-      } else if (next.step === 'chairs') {
-        next.chairs = num ?? 0
-        next.step = 'grade'
-        const lines = addAssistant(PHARMA_QUESTIONS.grade)
-        setPharmaFlow(next)
-        await streamLines(lines)
-      } else if (next.step === 'grade') {
-        next.grade = (l.includes('316') || l.includes('316l')) ? '316L' : '304'
-        next.step = 'done'
-        setPharmaFlow(null)
-
-        if (next.type === 'chair') {
-          const response = PHARMA_CHAIR_RESPONSE(next)
-          const lines = addAssistant(response)
-          trackMessage(trimmed)
-          openModelInViewer('pharma_chair', {})
-          await streamLines(lines)
-        } else {
-          const response = PHARMA_TABLE_RESPONSE(next)
-          const lines = addAssistant(response)
-          trackMessage(trimmed)
-          const dims: ShapeDimensions = { width: next.length, height: next.height, depth: next.width }
-          openModelInViewer('pharma_table', dims)
-          await streamLines(lines)
-        }
-      }
-      return
-    }
-
-    // ── Pharma intent: start the flow ──
-    if (isPharmaIntent(trimmed)) {
-      setMessages(prev => [...prev, { role: 'user', lines: [trimmed], visibleLines: 1 }])
-      const type: 'table' | 'chair' = trimmed.toLowerCase().includes('chair') || trimmed.toLowerCase().includes('stool') ? 'chair' : 'table'
-      const flow: PharmaFlow = { type, step: type === 'chair' ? 'height' : 'length' }
-      setPharmaFlow(flow)
-      trackMessage(trimmed)
-
-      const chairIntro = type === 'chair'
-      ? `I will help you design a pharma-grade stainless steel cleanroom chair for your plant.
-Let me ask a few questions to get the exact specifications right.
-What seat height do you need? (standard adjustable range: 450–650 mm, gas-lift recommended for GMP)`
-      : `I will help you design a pharma-grade stainless steel ${type} for your plant.
-Let me ask a few questions to get the exact specifications right.
-${PHARMA_QUESTIONS.length}`
-    const intro = chairIntro
-      const lines = addAssistant(intro)
-      await streamLines(lines)
-      return
-    }
-
-    // ── Standard flow ──
-    const lines = splitLines(getResponse(trimmed))
-    setMessages(prev => [...prev, { role: 'user', lines: [trimmed], visibleLines: 1 }, { role: 'assistant', lines, visibleLines: 0 }])
-    setIsStreaming(true); abortRef.current = false
+    setMessages(prev => [...prev, { role: 'user', lines: [trimmed], visibleLines: 1 }])
+    setIsStreaming(true)
+    abortRef.current = false
     trackMessage(trimmed)
-    const model = getModelType(trimmed)
-    if (model) openModelInViewer(model, parseDimensions(trimmed))
-    for (let i = 0; i < lines.length; i++) {
-      if (abortRef.current) break
-      await new Promise(r => setTimeout(r, i === 0 ? 280 : 380))
-      setMessages(prev => { const u = [...prev]; const l = { ...u[u.length - 1] }; l.visibleLines = i + 1; u[u.length - 1] = l; return u })
+
+    try {
+      const response = await fetch(CHAT_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: trimmed }],
+          user_id: session?.user?.id ?? 'anonymous',
+          conversation_id: currentConversationId,
+        }),
+      })
+
+      if (!response.ok) throw new Error(`Server error: ${response.status}`)
+
+      const data = await response.json()
+      // data shape: { text, has_stl, stl_url, step_url, dxf_url, conversation_id }
+
+      // Save conversation_id for subsequent messages
+      if (data.conversation_id) {
+        setCurrentConversationId(data.conversation_id)
+        // Add to conversations list if it's a new one
+        setConversations(prev => {
+          const exists = prev.find(c => c.id === data.conversation_id)
+          if (exists) return prev
+          return [{ id: data.conversation_id, title: trimmed.slice(0, 50), time: 'Just now' }, ...prev]
+        })
+      }
+
+      const lines = splitLines(data.text ?? 'No response received.')
+
+      const cadUrls: CadUrls = {
+        stl_url:  data.stl_url  ?? null,
+        step_url: data.step_url ?? null,
+        dxf_url:  data.dxf_url  ?? null,
+      }
+
+      // If backend generated a CAD file, open the 3D viewer
+      if (data.has_stl) {
+        setViewerOpen(true)
+        setIsGenerating(true)
+        setActiveModel('empty')
+        setTimeout(() => {
+          setIsGenerating(false)
+          // Infer a local ModelType from response text for the 3D preview
+          const tl = (data.text ?? '').toLowerCase()
+          let inferred: ModelType = 'cube'
+          if (tl.includes('spur gear'))                           inferred = 'spur_gear'
+          else if (tl.includes('helical'))                        inferred = 'helical_gear'
+          else if (tl.includes('shaft'))                          inferred = 'shaft'
+          else if (tl.includes('bearing'))                        inferred = 'bearing'
+          else if (tl.includes('bolt') || tl.includes('screw'))  inferred = 'bolt'
+          else if (tl.includes('sphere') || tl.includes('ball')) inferred = 'sphere'
+          else if (tl.includes('cylinder'))                       inferred = 'cylinder'
+          else if (tl.includes('rectangle') || tl.includes('box')) inferred = 'rectangle'
+          setActiveModel(inferred)
+        }, 2800)
+      }
+
+      // Add assistant message, attaching cadUrls only when has_stl is true
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        lines,
+        visibleLines: 0,
+        ...(data.has_stl ? { cadUrls } : {}),
+      } as AssistantMessage])
+
+      // Stream lines in one by one
+      for (let i = 0; i < lines.length; i++) {
+        if (abortRef.current) break
+        await new Promise(r => setTimeout(r, i === 0 ? 280 : 380))
+        setMessages(prev => {
+          const u = [...prev]
+          const l = { ...u[u.length - 1] }
+          l.visibleLines = i + 1
+          u[u.length - 1] = l
+          return u
+        })
+      }
+
+    } catch (err) {
+      console.error('[MecAI] /chat error:', err)
+      setMessages(prev => [...prev, { role: 'assistant', lines: ['Something went wrong connecting to MecAI. Please try again.'], visibleLines: 1 }])
+    } finally {
+      setIsStreaming(false)
     }
-    setIsStreaming(false)
-  }, [isStreaming, openModelInViewer, pharmaFlow, addAssistant, streamLines])
+  }, [isStreaming, session, currentConversationId])
 
   const stopStreaming = useCallback(() => { abortRef.current = true; setIsStreaming(false) }, [])
+
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input) }
   }, [input, sendMessage])
@@ -606,7 +481,6 @@ ${PHARMA_QUESTIONS.length}`
   const handleNavigate = useCallback((p: 'home' | 'projects') => {
     abortRef.current = true
     setIsStreaming(false)
-    setPharmaFlow(null)
     setPage(p)
     setMessages([])
     setInput('')
@@ -614,6 +488,7 @@ ${PHARMA_QUESTIONS.length}`
     setActiveModel('empty')
     setPendingModel('empty')
     setIsGenerating(false)
+    setCurrentConversationId(null)
     if (p === 'home') setChatKey(k => k + 1)
     setTimeout(() => textareaRef.current?.focus(), 100)
   }, [])
@@ -694,10 +569,12 @@ ${PHARMA_QUESTIONS.length}`
       <SearchPanel
         open={searchOpen} query={searchQuery} onChange={setSearchQuery}
         onClose={() => { setSearchOpen(false); setSearchQuery('') }}
-        chats={ALL_CHATS} surface={surface} border={border}
+        chats={conversations.length > 0 ? conversations : EMPTY_CHATS}
+        surface={surface} border={border}
         textPrimary={textPrimary} textMuted={textMuted} darkMode={dm}
         inputRef={searchInputRef} sidebarWidth={sidebarWidth}
         viewerWidth={viewerWidth} viewerOpen={viewerOpen}
+        onSelectChat={loadConversation}
       />
 
       {/* 3D Viewer */}
@@ -725,8 +602,14 @@ ${PHARMA_QUESTIONS.length}`
           </div>
         </div>
         <div style={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
-          <ModelViewer onClose={() => { setViewerOpen(false); setActiveModel('empty'); setPendingModel('empty') }}
-            darkMode={dm} modelType={activeModel} pendingModel={pendingModel} isGenerating={isGenerating} shapeDims={shapeDims} />
+          <ModelViewer
+            onClose={() => { setViewerOpen(false); setActiveModel('empty'); setPendingModel('empty') }}
+            darkMode={dm}
+            modelType={activeModel}
+            pendingModel={pendingModel}
+            isGenerating={isGenerating}
+            shapeDims={shapeDims}
+          />
         </div>
       </div>
 
@@ -776,6 +659,10 @@ ${PHARMA_QUESTIONS.length}`
                                   <span style={{ display: 'inline-block', width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#0a1628', marginTop: '6px', animation: 'blink 0.8s infinite' }} />
                                 )}
                               </div>
+                              {/* Download buttons — shown when backend returns has_stl: true */}
+                              {'cadUrls' in msg && msg.cadUrls && (i < messages.length - 1 || !isStreaming) && (
+                                <DownloadButtons urls={(msg as AssistantMessage).cadUrls!} darkMode={dm} />
+                              )}
                             </div>
                           </div>
                         )}
@@ -786,7 +673,7 @@ ${PHARMA_QUESTIONS.length}`
                 </div>
                 <div style={{ padding: '12px 24px 20px', backgroundColor: bg, flexShrink: 0 }}>
                   <div style={{ maxWidth: '700px', margin: '0 auto' }}>
-                    <InputBar {...inputBarProps} placeholder={pharmaFlow ? 'Type your answer...' : 'Ask a follow-up...'} />
+                    <InputBar {...inputBarProps} placeholder="Ask a follow-up..." />
                   </div>
                 </div>
               </div>

@@ -9,6 +9,20 @@ const handler = NextAuth({
     }),
   ],
   callbacks: {
+    async jwt({ token, account, profile }) {
+      // On first sign-in, Google's sub is the stable unique user ID
+      if (account && profile) {
+        token.id = token.sub
+      }
+      return token
+    },
+    async session({ session, token }) {
+      // Attach the id to session.user so it's available everywhere
+      if (session.user) {
+        session.user.id = token.id as string
+      }
+      return session
+    },
     async redirect() {
       return '/chat'
     },

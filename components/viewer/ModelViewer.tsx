@@ -875,6 +875,16 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
     setTimeout(() => setStepToast(false), 3000)
   }, [])
 
+  const handleExportDXF = useCallback(() => {
+    setStepToast(true)
+    setTimeout(() => setStepToast(false), 3000)
+  }, [])
+
+  const handleExportPDF = useCallback(() => {
+    setStepToast(true)
+    setTimeout(() => setStepToast(false), 3000)
+  }, [])
+
   const meta = MODEL_META[modelType]
   const isEmpty = modelType === 'empty' && pendingModel === 'empty'
 
@@ -911,6 +921,8 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
           <ToolBtn icon={<Download size={12} />} label="Export PNG"       onClick={handleExport} />
           <ToolBtn icon={<span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '-0.01em', lineHeight: 1 }}>STL</span>} label="Export STL"            onClick={handleExportSTL} />
           <ToolBtn icon={<span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '-0.01em', lineHeight: 1 }}>STP</span>} label="Export STEP — coming soon" onClick={handleExportSTEP} />
+          <ToolBtn icon={<span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '-0.01em', lineHeight: 1 }}>DXF</span>} label="Export DXF — coming soon" onClick={handleExportDXF} />
+          <ToolBtn icon={<span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '-0.01em', lineHeight: 1 }}>PDF</span>} label="Export PDF — coming soon" onClick={handleExportPDF} />
           <ToolBtn icon={<RotateCcw size={12} />} label="Reset view"  onClick={handleReset} />
           <ToolBtn icon={<ZoomIn size={12} />}    label="Zoom in"     onClick={() => setZoomDelta(1.5)} />
           <ToolBtn icon={<ZoomOut size={12} />}   label="Zoom out"    onClick={() => setZoomDelta(-1.5)} />
@@ -918,13 +930,6 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
           <ToolBtn icon={<span style={{ fontSize: '10px' }}>🌡</span>} label="Stress heatmap" active={false} onClick={() => setStepToast(true)} />
           <ToolBtn icon={<Grid3x3 size={12} />}   label="Toggle grid" active={gridVisible} onClick={() => setGrid(g => !g)} />
           <ToolBtn icon={<Pencil size={12} />}    label="2D Drawing"  active={show2D}      onClick={() => setShow2D(s => !s)} />
-          {modelType !== 'empty' && (
-            <button title={autoRotate ? 'Stop showcase' : 'Showcase — auto rotate'} onClick={handleShowcase}
-              style={{ width: '26px', height: '26px', borderRadius: '6px', border: '1px solid', marginLeft: '4px', borderColor: autoRotate ? 'rgba(167,243,208,0.5)' : 'rgba(255,255,255,0.07)', backgroundColor: autoRotate ? 'rgba(167,243,208,0.12)' : 'transparent', color: autoRotate ? '#6ee7b7' : '#4a5568', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.15s' }}
-              onMouseEnter={e => { if (!autoRotate) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = '#94a3b8' } }}
-              onMouseLeave={e => { if (!autoRotate) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#4a5568' } }}
-            >{autoRotate ? <Square size={10} /> : <Play size={11} />}</button>
-          )}
         </div>
 
         <button onClick={onClose}
