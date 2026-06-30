@@ -6,6 +6,8 @@ import { OrbitControls, GizmoHelper, GizmoViewport } from '@react-three/drei'
 import * as THREE from 'three'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
 import { X, Save, Download, RotateCcw, ZoomIn, ZoomOut, Box, Grid3x3, Play, Square } from 'lucide-react'
+import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
+import { useLoader } from '@react-three/fiber'
 
 export type ModelType = 'spur_gear' | 'helical_gear' | 'shaft' | 'bearing' | 'bolt' | 'cube' | 'rectangle' | 'sphere' | 'cylinder' | 'pharma_table' | 'pharma_chair' | 'empty'
 
@@ -26,6 +28,35 @@ function matProps(material: string) {
     case 'cast_iron':   return { color: '#626870', metalness: 0.50, roughness: 0.62 }
     default:            return { color: '#b4c4d0', metalness: 0.73, roughness: 0.30 }
   }
+}
+
+function RealSTLModel({ url, ar, wireframe }: { url: string; ar: boolean; wireframe: boolean }) {
+  const geometry = useLoader(STLLoader, url)
+  const ref = useRef<THREE.Mesh>(null)
+
+  useFrame((_, d) => { if (ref.current && ar) ref.current.rotation.y += d * 0.5 })
+
+  const mat = useMemo(() => new THREE.MeshStandardMaterial({ ...matProps('steel') }), [])
+  useEffect(() => { mat.wireframe = wireframe; mat.needsUpdate = true }, [mat, wireframe])
+
+  const centeredGeometry = useMemo(() => {
+    const geo = geometry.clone()
+    geo.computeBoundingBox()
+    const box = geo.boundingBox!
+    const center = new THREE.Vector3()
+    box.getCenter(center)
+    geo.translate(-center.x, -center.y, -center.z)
+
+    const size = new THREE.Vector3()
+    box.getSize(size)
+    const maxDim = Math.max(size.x, size.y, size.z)
+    const scale = maxDim > 0 ? 3.0 / maxDim : 1
+    geo.scale(scale, scale, scale)
+
+    return geo
+  }, [geometry])
+
+  return <mesh ref={ref} geometry={centeredGeometry} material={mat} />
 }
 
 function InfiniteGrid({ visible }: { visible: boolean }) {
@@ -214,7 +245,7 @@ function CubeModel({ dims, ar, wireframe, heatmap }: { dims: ShapeDimensions; ar
   return <mesh ref={ref} material={mat}><boxGeometry args={[s, s, s]} /></mesh>
 }
 
-function RectangleModel({ dims, ar, wireframe, heatmap }: { dims: ShapeDimensions; ar: boolean; wireframe: boolean; heatmap: boolean }) {
+function RectangleModel({ dims, ar, wireframe }: { dims: ShapeDimensions; ar: boolean; wireframe: boolean }) {
   const ref = useRef<THREE.Mesh>(null)
   const rawW = dims.width ?? 3, rawH = dims.height ?? 1.5, rawD = dims.depth ?? 1.2
   const scale = 3.2 / Math.max(rawW, rawH, rawD)
@@ -262,7 +293,6 @@ function SceneCapture({ sceneRef }: { sceneRef: React.MutableRefObject<THREE.Sce
   return null
 }
 
-// ── Empty state — ghost wireframe gear SVG ────────────────────────────────
 function EmptyState() {
   const teeth = 16
   const OR = 52, IR = 36, bore = 10
@@ -285,21 +315,16 @@ function EmptyState() {
       alignItems: 'center', justifyContent: 'center',
       gap: 20, pointerEvents: 'none',
     }}>
-      {/* Ghost gear illustration */}
       <svg width="160" height="160" viewBox="0 0 160 160" style={{ opacity: 0.12 }}>
-        {/* Outer gear */}
         <polygon points={pts.join(' ')} fill="none" stroke="#63b3ed" strokeWidth="1.5" strokeLinejoin="round" />
         <circle cx={cx} cy={cy} r={IR} fill="none" stroke="#63b3ed" strokeWidth="1" strokeDasharray="4,3" />
         <circle cx={cx} cy={cy} r={bore} fill="none" stroke="#63b3ed" strokeWidth="1.5" />
-        {/* Cross centre lines */}
         <line x1={cx-OR-8} y1={cy} x2={cx+OR+8} y2={cy} stroke="#63b3ed" strokeWidth="0.7" strokeDasharray="6,3" />
         <line x1={cx} y1={cy-OR-8} x2={cx} y2={cy+OR+8} stroke="#63b3ed" strokeWidth="0.7" strokeDasharray="6,3" />
-        {/* Small second gear hint */}
         <circle cx={cx+OR+18} cy={cy+OR+18} r={18} fill="none" stroke="#63b3ed" strokeWidth="1" strokeDasharray="3,2" />
         <circle cx={cx+OR+18} cy={cy+OR+18} r={6} fill="none" stroke="#63b3ed" strokeWidth="1" />
       </svg>
 
-      {/* Text */}
       <div style={{ textAlign: 'center' }}>
         <p style={{ margin: 0, fontSize: '13px', fontWeight: 400, color: 'rgba(255,255,255,0.22)', fontFamily: F, letterSpacing: '0.01em' }}>
           Generate a component to view it here
@@ -313,17 +338,17 @@ function EmptyState() {
 }
 
 const MODEL_META: Record<ModelType, { label: string; material: string; specs: { label: string; value: string }[] }> = {
-  spur_gear:    { label: 'Spur Gear',       material: '4140 Chromoly Steel',   specs: [{ label: 'Teeth', value: '20' }, { label: 'Module', value: '2.0 mm' }, { label: 'Pitch Ø', value: '40 mm' }] },
-  helical_gear: { label: 'Helical Gear',    material: '4140 Chromoly Steel',   specs: [{ label: 'Teeth', value: '18' }, { label: 'Helix', value: '20°' }, { label: 'Module', value: '2.0 mm' }] },
-  shaft:        { label: 'Steel Shaft',     material: '1045 Medium Carbon',    specs: [{ label: 'Ø', value: '64 mm' }, { label: 'Length', value: '360 mm' }, { label: 'Finish', value: 'Ra 0.8 μm' }] },
+  spur_gear:    { label: 'Spur Gear',       material: '4140 Chromoly Steel',   specs: [{ label: 'Teeth', value: '20' }, { label: 'Module', value: '2.0 mm' }, { label: 'Pitch \u00d8', value: '40 mm' }] },
+  helical_gear: { label: 'Helical Gear',    material: '4140 Chromoly Steel',   specs: [{ label: 'Teeth', value: '18' }, { label: 'Helix', value: '20\u00b0' }, { label: 'Module', value: '2.0 mm' }] },
+  shaft:        { label: 'Steel Shaft',     material: '1045 Medium Carbon',    specs: [{ label: '\u00d8', value: '64 mm' }, { label: 'Length', value: '360 mm' }, { label: 'Finish', value: 'Ra 0.8 \u03bcm' }] },
   bearing:      { label: 'Ball Bearing',    material: '52100 Bearing Steel',   specs: [{ label: 'Type', value: '6308 Deep Groove' }, { label: 'Balls', value: '10' }, { label: 'OD', value: '90 mm' }] },
   bolt:         { label: 'Hex Bolt M12',    material: 'Grade 8.8 Alloy Steel', specs: [{ label: 'Standard', value: 'ISO 4014' }, { label: 'Grade', value: '8.8' }, { label: 'Torque', value: '85 Nm' }] },
   cube:         { label: 'Cube',            material: 'Structural Steel',      specs: [{ label: 'Faces', value: '6' }, { label: 'Edges', value: '12' }, { label: 'E', value: '200 GPa' }] },
   rectangle:    { label: 'Rectangular Box', material: 'Structural Steel',      specs: [{ label: 'Faces', value: '6' }, { label: 'Type', value: 'Cuboid' }, { label: 'E', value: '200 GPa' }] },
   sphere:       { label: 'Sphere',          material: '316 Stainless Steel',   specs: [{ label: 'Type', value: 'Solid Ball' }, { label: 'Surface', value: 'Polished' }, { label: 'E', value: '193 GPa' }] },
   cylinder:     { label: 'Cylinder',        material: 'Structural Steel',      specs: [{ label: 'Ends', value: 'Flat' }, { label: 'E', value: '200 GPa' }, { label: 'Type', value: 'Solid' }] },
-  pharma_table: { label: 'Pharma SS Table', material: '316L Stainless Steel (GMP)', specs: [{ label: 'Finish', value: 'Ra ≤ 0.8 μm' }, { label: 'Standard', value: 'GMP / cGMP' }, { label: 'Load', value: '200 kg UDL' }] },
-  pharma_chair: { label: 'Pharma SS Chair', material: '304 Stainless Steel (GMP)', specs: [{ label: 'Seat H', value: '450–650 mm' }, { label: 'Type', value: 'Swivel / ESD' }, { label: 'Rating', value: 'ISO 14644' }] },
+  pharma_table: { label: 'Pharma SS Table', material: '316L Stainless Steel (GMP)', specs: [{ label: 'Finish', value: 'Ra \u2264 0.8 \u03bcm' }, { label: 'Standard', value: 'GMP / cGMP' }, { label: 'Load', value: '200 kg UDL' }] },
+  pharma_chair: { label: 'Pharma SS Chair', material: '304 Stainless Steel (GMP)', specs: [{ label: 'Seat H', value: '450\u2013650 mm' }, { label: 'Type', value: 'Swivel / ESD' }, { label: 'Rating', value: 'ISO 14644' }] },
   empty:        { label: '', material: '', specs: [] },
 }
 
@@ -343,6 +368,8 @@ export interface ModelViewerProps {
   isGenerating?: boolean
   shapeDims?: ShapeDimensions
   cadUrls?: CadUrls | null
+  stlUrl?: string | null
+  realSpecs?: { type: string; dimensions: string; material: string } | null
 }
 
 const DIM_COLOR  = '#1a1a1a'
@@ -422,11 +449,11 @@ function Drawing2D({ modelType, shapeDims, meta, isPending = false }: { modelTyp
         <polygon points={pts.join(' ')} fill="none" stroke={LINE_COLOR} strokeWidth="1.2" strokeLinejoin="round" />
         <circle cx={cx} cy={cy} r={IR} fill="none" stroke={LINE_COLOR} strokeWidth="0.8" strokeDasharray="4,3" opacity="0.5" />
         <circle cx={cx} cy={cy} r={bore} fill="none" stroke={LINE_COLOR} strokeWidth="1.2" />
-        <DimLine x1={cx} y1={cy-OR-8} x2={cx+OR} y2={cy-OR-8} label={`Ø${OR*2/10*2} mm`} labelX={cx+OR/2} labelY={cy-OR-14} />
+        <DimLine x1={cx} y1={cy-OR-8} x2={cx+OR} y2={cy-OR-8} label={`\u00d8${OR*2/10*2} mm`} labelX={cx+OR/2} labelY={cy-OR-14} />
         <DimLine x1={cx} y1={cy+IR+8} x2={cx+IR} y2={cy+IR+8} label={`PCD ${IR*2/10*2} mm`} labelX={cx+IR/2} labelY={cy+IR+18} />
-        <DimLine x1={cx-bore-8} y1={cy} x2={cx-bore-8} y2={cy-bore} label={`Ø${bore/10*20} mm`} labelX={cx-bore-22} labelY={cy-bore/2} vertical />
-        {helix && <text x={cx+OR+14} y={cy+4} fill={DIM_COLOR} fontSize="7" fontFamily="'DM Sans',monospace">β=20°</text>}
-        <text x={cx} y={cy+OR+30} fill={TEXT_COLOR} fontSize="7" fontFamily="'DM Sans',monospace" textAnchor="middle" opacity="0.6">FRONT VIEW — {teeth}T MODULE 2.0</text>
+        <DimLine x1={cx-bore-8} y1={cy} x2={cx-bore-8} y2={cy-bore} label={`\u00d8${bore/10*20} mm`} labelX={cx-bore-22} labelY={cy-bore/2} vertical />
+        {helix && <text x={cx+OR+14} y={cy+4} fill={DIM_COLOR} fontSize="7" fontFamily="'DM Sans',monospace">\u03b2=20\u00b0</text>}
+        <text x={cx} y={cy+OR+30} fill={TEXT_COLOR} fontSize="7" fontFamily="'DM Sans',monospace" textAnchor="middle" opacity="0.6">FRONT VIEW \u2014 {teeth}T MODULE 2.0</text>
       </g>
     )
   } else if (modelType === 'shaft') {
@@ -446,10 +473,10 @@ function Drawing2D({ modelType, shapeDims, meta, isPending = false }: { modelTyp
         <line x1={ex} y1={cy-r} x2={ex-8} y2={cy-r+5} stroke={LINE_COLOR} strokeWidth="0.8" />
         <line x1={ex} y1={cy+r} x2={ex-8} y2={cy+r-5} stroke={LINE_COLOR} strokeWidth="0.8" />
         <DimLine x1={sx} y1={cy+r+18} x2={ex} y2={cy+r+18} label="360 mm" labelX={cx} labelY={cy+r+28} />
-        <DimLine x1={sx-18} y1={cy} x2={sx-18} y2={cy-r} label="Ø64" labelX={sx-32} labelY={cy-r/2} vertical />
-        <DimLine x1={sx-18} y1={cy} x2={sx-18} y2={cy-sr} label="Ø88" labelX={sx-46} labelY={cy-sr/2} vertical />
-        <text x={cx} y={cy-r-kH-10} fill={DIM_COLOR} fontSize="6.5" fontFamily="'DM Sans',monospace" textAnchor="middle">KW 12×8×62 (DIN 6885)</text>
-        <text x={cx} y={cy+r+46} fill={TEXT_COLOR} fontSize="7" fontFamily="'DM Sans',monospace" textAnchor="middle" opacity="0.6">FRONT VIEW — 1045 STEEL — Ra 0.8 μm</text>
+        <DimLine x1={sx-18} y1={cy} x2={sx-18} y2={cy-r} label="\u00d864" labelX={sx-32} labelY={cy-r/2} vertical />
+        <DimLine x1={sx-18} y1={cy} x2={sx-18} y2={cy-sr} label="\u00d888" labelX={sx-46} labelY={cy-sr/2} vertical />
+        <text x={cx} y={cy-r-kH-10} fill={DIM_COLOR} fontSize="6.5" fontFamily="'DM Sans',monospace" textAnchor="middle">KW 12\u00d78\u00d762 (DIN 6885)</text>
+        <text x={cx} y={cy+r+46} fill={TEXT_COLOR} fontSize="7" fontFamily="'DM Sans',monospace" textAnchor="middle" opacity="0.6">FRONT VIEW \u2014 1045 STEEL \u2014 Ra 0.8 \u03bcm</text>
       </g>
     )
   } else if (modelType === 'bearing') {
@@ -472,9 +499,9 @@ function Drawing2D({ modelType, shapeDims, meta, isPending = false }: { modelTyp
         <CentreLine x1={cx+160-OR/2-10} y1={cy} x2={cx+160+OR/2+10} y2={cy} />
         <CentreLine x1={cx+160} y1={cy-OR/2-10} x2={cx+160} y2={cy+OR/2+10} />
         <DimLine x1={bx} y1={cy+OR/2+16} x2={bx+W2*4} y2={cy+OR/2+16} label="23 mm" labelX={cx-30} labelY={cy+OR/2+26} />
-        <DimLine x1={cx+160+OR/2+12} y1={cy} x2={cx+160+OR/2+12} y2={cy-OR/2} label="Ø90" labelX={cx+160+OR/2+26} labelY={cy-OR/4} vertical />
-        <DimLine x1={cx+160+OR/2+28} y1={cy} x2={cx+160+OR/2+28} y2={cy-IRR/2} label="Ø40" labelX={cx+160+OR/2+42} labelY={cy-IRR/4} vertical />
-        <text x={cx-30} y={cy+OR/2+44} fill={TEXT_COLOR} fontSize="7" fontFamily="'DM Sans',monospace" textAnchor="middle" opacity="0.6">SECTION A-A — 6308 DEEP GROOVE</text>
+        <DimLine x1={cx+160+OR/2+12} y1={cy} x2={cx+160+OR/2+12} y2={cy-OR/2} label="\u00d890" labelX={cx+160+OR/2+26} labelY={cy-OR/4} vertical />
+        <DimLine x1={cx+160+OR/2+28} y1={cy} x2={cx+160+OR/2+28} y2={cy-IRR/2} label="\u00d840" labelX={cx+160+OR/2+42} labelY={cy-IRR/4} vertical />
+        <text x={cx-30} y={cy+OR/2+44} fill={TEXT_COLOR} fontSize="7" fontFamily="'DM Sans',monospace" textAnchor="middle" opacity="0.6">SECTION A-A \u2014 6308 DEEP GROOVE</text>
         <text x={cx+160} y={cy+OR/2+44} fill={TEXT_COLOR} fontSize="7" fontFamily="'DM Sans',monospace" textAnchor="middle" opacity="0.6">FRONT VIEW</text>
       </g>
     )
@@ -498,7 +525,7 @@ function Drawing2D({ modelType, shapeDims, meta, isPending = false }: { modelTyp
         <DimLine x1={bx-14} y1={cy} x2={bx-14} y2={cy-shR} label="M12" labelX={bx-28} labelY={cy-shR/2} vertical />
         <DimLine x1={bx-14} y1={cy} x2={bx-14} y2={cy-hW/2} label="SW19" labelX={bx-42} labelY={cy-hW/4} vertical />
         <text x={bx+hH+6+shL-thL+thL/2} y={cy-shR-8} fill={DIM_COLOR} fontSize="6.5" fontFamily="'DM Sans',monospace" textAnchor="middle">p=1.75mm</text>
-        <text x={cx} y={cy+hW/2+44} fill={TEXT_COLOR} fontSize="7" fontFamily="'DM Sans',monospace" textAnchor="middle" opacity="0.6">SIDE VIEW — M12 ISO 4014 GR.8.8</text>
+        <text x={cx} y={cy+hW/2+44} fill={TEXT_COLOR} fontSize="7" fontFamily="'DM Sans',monospace" textAnchor="middle" opacity="0.6">SIDE VIEW \u2014 M12 ISO 4014 GR.8.8</text>
       </g>
     )
   } else if (modelType === 'cube') {
@@ -513,7 +540,7 @@ function Drawing2D({ modelType, shapeDims, meta, isPending = false }: { modelTyp
         <CentreLine x1={cx} y1={cy-s/2-dy-10} x2={cx} y2={cy+s/2+10} />
         <DimLine x1={cx-s/2} y1={cy+s/2+18} x2={cx+s/2} y2={cy+s/2+18} label={shapeDims.width ? `${shapeDims.width} mm` : '100 mm'} labelX={cx} labelY={cy+s/2+28} />
         <DimLine x1={cx-s/2-18} y1={cy-s/2} x2={cx-s/2-18} y2={cy+s/2} label={shapeDims.width ? `${shapeDims.width} mm` : '100 mm'} labelX={cx-s/2-32} labelY={cy} vertical />
-        <text x={cx} y={cy+s/2+46} fill={TEXT_COLOR} fontSize="7" fontFamily="'DM Sans',monospace" textAnchor="middle" opacity="0.6">ISO VIEW — STRUCTURAL STEEL</text>
+        <text x={cx} y={cy+s/2+46} fill={TEXT_COLOR} fontSize="7" fontFamily="'DM Sans',monospace" textAnchor="middle" opacity="0.6">ISO VIEW \u2014 STRUCTURAL STEEL</text>
       </g>
     )
   } else if (modelType === 'cylinder') {
@@ -525,8 +552,8 @@ function Drawing2D({ modelType, shapeDims, meta, isPending = false }: { modelTyp
         <ellipse cx={cx-len2/2} cy={cy} rx={10} ry={r2} fill="none" stroke={LINE_COLOR} strokeWidth="0.9" strokeDasharray="3,2" />
         <ellipse cx={cx+len2/2} cy={cy} rx={10} ry={r2} fill="none" stroke={LINE_COLOR} strokeWidth="1.1" />
         <DimLine x1={cx-len2/2} y1={cy+r2+18} x2={cx+len2/2} y2={cy+r2+18} label={shapeDims.length ? `${shapeDims.length} mm` : '200 mm'} labelX={cx} labelY={cy+r2+28} />
-        <DimLine x1={cx+len2/2+18} y1={cy} x2={cx+len2/2+18} y2={cy-r2} label={shapeDims.radius ? `Ø${shapeDims.radius*2} mm` : 'Ø100 mm'} labelX={cx+len2/2+34} labelY={cy-r2/2} vertical />
-        <text x={cx} y={cy+r2+46} fill={TEXT_COLOR} fontSize="7" fontFamily="'DM Sans',monospace" textAnchor="middle" opacity="0.6">FRONT VIEW — STRUCTURAL STEEL</text>
+        <DimLine x1={cx+len2/2+18} y1={cy} x2={cx+len2/2+18} y2={cy-r2} label={shapeDims.radius ? `\u00d8${shapeDims.radius*2} mm` : '\u00d8100 mm'} labelX={cx+len2/2+34} labelY={cy-r2/2} vertical />
+        <text x={cx} y={cy+r2+46} fill={TEXT_COLOR} fontSize="7" fontFamily="'DM Sans',monospace" textAnchor="middle" opacity="0.6">FRONT VIEW \u2014 STRUCTURAL STEEL</text>
       </g>
     )
   } else if (modelType === 'sphere') {
@@ -538,8 +565,8 @@ function Drawing2D({ modelType, shapeDims, meta, isPending = false }: { modelTyp
         <circle cx={cx} cy={cy} r={r3} fill="none" stroke={LINE_COLOR} strokeWidth="1.2" />
         <ellipse cx={cx} cy={cy} rx={r3} ry={r3*0.2} fill="none" stroke={LINE_COLOR} strokeWidth="0.7" strokeDasharray="4,2" opacity="0.5" />
         <DimLine x1={cx-r3-16} y1={cy} x2={cx-r3-16} y2={cy-r3} label={shapeDims.radius ? `R${shapeDims.radius} mm` : 'R80 mm'} labelX={cx-r3-32} labelY={cy-r3/2} vertical />
-        <DimLine x1={cx-r3} y1={cy+r3+16} x2={cx+r3} y2={cy+r3+16} label={shapeDims.radius ? `Ø${shapeDims.radius*2} mm` : 'Ø160 mm'} labelX={cx} labelY={cy+r3+26} />
-        <text x={cx} y={cy+r3+44} fill={TEXT_COLOR} fontSize="7" fontFamily="'DM Sans',monospace" textAnchor="middle" opacity="0.6">FRONT VIEW — 316 STAINLESS</text>
+        <DimLine x1={cx-r3} y1={cy+r3+16} x2={cx+r3} y2={cy+r3+16} label={shapeDims.radius ? `\u00d8${shapeDims.radius*2} mm` : '\u00d8160 mm'} labelX={cx} labelY={cy+r3+26} />
+        <text x={cx} y={cy+r3+44} fill={TEXT_COLOR} fontSize="7" fontFamily="'DM Sans',monospace" textAnchor="middle" opacity="0.6">FRONT VIEW \u2014 316 STAINLESS</text>
       </g>
     )
   } else if (modelType === 'rectangle') {
@@ -563,7 +590,7 @@ function Drawing2D({ modelType, shapeDims, meta, isPending = false }: { modelTyp
         <text x={sX + D2 / 2} y={sY + H2 + 46} fill={TEXT_COLOR} fontSize="7" fontFamily="'DM Sans',monospace" textAnchor="middle" opacity="0.6">SIDE VIEW</text>
         <line x1={fX + W2 * 2} y1={fY - H2} x2={fX + W2 * 2 + dx} y2={fY - H2 - dy} stroke={LINE_COLOR} strokeWidth="0.8" opacity="0.5" />
         <line x1={fX + W2 * 2 + dx} y1={fY - H2 - dy} x2={fX + W2 * 2 + dx + D2 * 0.7} y2={fY - H2 - dy} stroke={LINE_COLOR} strokeWidth="0.8" opacity="0.5" />
-        <text x={cx} y={cy + H2 + 64} fill={TEXT_COLOR} fontSize="7" fontFamily="'DM Sans',monospace" textAnchor="middle" opacity="0.6">{'W×H×D — STRUCTURAL STEEL — E=200 GPa'}</text>
+        <text x={cx} y={cy + H2 + 64} fill={TEXT_COLOR} fontSize="7" fontFamily="'DM Sans',monospace" textAnchor="middle" opacity="0.6">{'W\u00d7H\u00d7D \u2014 STRUCTURAL STEEL \u2014 E=200 GPa'}</text>
       </g>
     )
   } else if (modelType === 'pharma_table') {
@@ -572,28 +599,22 @@ function Drawing2D({ modelType, shapeDims, meta, isPending = false }: { modelTyp
     drawing = (
       <g>
         <CentreLine x1={tx - 16} y1={cy} x2={tx + tL + 16} y2={cy} />
-        {/* Tabletop */}
         <rect x={tx} y={ty} width={tL} height={10} fill="none" stroke={LINE_COLOR} strokeWidth="1.2" />
-        {/* Legs */}
         <rect x={tx + 12} y={ty + 10} width={legR * 2} height={tH - 10} fill="none" stroke={LINE_COLOR} strokeWidth="1" />
         <rect x={tx + tL - 12 - legR * 2} y={ty + 10} width={legR * 2} height={tH - 10} fill="none" stroke={LINE_COLOR} strokeWidth="1" />
-        {/* Undershelf */}
         <rect x={tx + 8} y={ty + shelfY} width={tL - 16} height={7} fill="none" stroke={LINE_COLOR} strokeWidth="0.8" strokeDasharray="4 2" />
-        {/* Feet */}
         <rect x={tx + 6} y={ty + tH - 6} width={legR * 2 + 8} height={6} fill="none" stroke={LINE_COLOR} strokeWidth="0.9" />
         <rect x={tx + tL - 14 - legR * 2} y={ty + tH - 6} width={legR * 2 + 8} height={6} fill="none" stroke={LINE_COLOR} strokeWidth="0.9" />
-        {/* Side view (right) */}
         <rect x={cx + 80} y={ty} width={tW} height={10} fill="none" stroke={LINE_COLOR} strokeWidth="1.2" />
         <rect x={cx + 92} y={ty + 10} width={legR * 2} height={tH - 10} fill="none" stroke={LINE_COLOR} strokeWidth="1" />
         <rect x={cx + 80 + tW - 12 - legR * 2} y={ty + 10} width={legR * 2} height={tH - 10} fill="none" stroke={LINE_COLOR} strokeWidth="1" />
         <CentreLine x1={cx + 72} y1={cy} x2={cx + 90 + tW} y2={cy} />
-        {/* Dims */}
         <DimLine x1={tx} y1={ty + tH + 18} x2={tx + tL} y2={ty + tH + 18} label={shapeDims.width ? `${shapeDims.width} mm` : '1800 mm'} labelX={cx - 50} labelY={ty + tH + 28} />
         <DimLine x1={tx - 18} y1={ty} x2={tx - 18} y2={ty + tH} label={shapeDims.height ? `${shapeDims.height} mm` : '900 mm'} labelX={tx - 34} labelY={cy} vertical />
         <DimLine x1={cx + 80} y1={ty + tH + 18} x2={cx + 80 + tW} y2={ty + tH + 18} label={shapeDims.depth ? `${shapeDims.depth} mm` : '750 mm'} labelX={cx + 80 + tW / 2} labelY={ty + tH + 28} />
-        <text x={cx - 50} y={ty + tH + 46} fill={TEXT_COLOR} fontSize="7" fontFamily="'DM Sans',monospace" textAnchor="middle" opacity="0.6">FRONT VIEW — GMP SS WORKBENCH</text>
+        <text x={cx - 50} y={ty + tH + 46} fill={TEXT_COLOR} fontSize="7" fontFamily="'DM Sans',monospace" textAnchor="middle" opacity="0.6">FRONT VIEW \u2014 GMP SS WORKBENCH</text>
         <text x={cx + 80 + tW / 2} y={ty + tH + 46} fill={TEXT_COLOR} fontSize="7" fontFamily="'DM Sans',monospace" textAnchor="middle" opacity="0.6">SIDE VIEW</text>
-        <text x={cx - 50} y={ty - 14} fill={DIM_COLOR} fontSize="6.5" fontFamily="'DM Sans',monospace" textAnchor="middle">COVED CORNERS — Ra ≤ 0.8 μm — GMP / cGMP COMPLIANT</text>
+        <text x={cx - 50} y={ty - 14} fill={DIM_COLOR} fontSize="6.5" fontFamily="'DM Sans',monospace" textAnchor="middle">COVED CORNERS \u2014 Ra \u2264 0.8 \u03bcm \u2014 GMP / cGMP COMPLIANT</text>
       </g>
     )
   } else if (modelType === 'pharma_chair') {
@@ -605,48 +626,30 @@ function Drawing2D({ modelType, shapeDims, meta, isPending = false }: { modelTyp
       <g>
         <CentreLine x1={cx2 - 100} y1={cy2 + seatY + colH / 2} x2={cx2 + 100} y2={cy2 + seatY + colH / 2} />
         <CentreLine x1={cx2} y1={cy2 - backH - 20} x2={cx2} y2={cy2 + seatY + colH + 20} />
-
-        {/* Backrest */}
         <rect x={cx2 - backW / 2} y={cy2 - backH - seatR * 0.18} width={backW} height={backH} fill="none" stroke={LINE_COLOR} strokeWidth="1.2" />
-        {/* Backrest perforations */}
         {[0.25, 0.5, 0.75].map((t, i) => (
           <line key={i} x1={cx2 - backW / 2 + 5} y1={cy2 - backH - seatR * 0.18 + backH * t} x2={cx2 + backW / 2 - 5} y2={cy2 - backH - seatR * 0.18 + backH * t} stroke={LINE_COLOR} strokeWidth="0.6" strokeDasharray="4 2" />
         ))}
-        {/* Backrest post */}
         <line x1={cx2} y1={cy2 - seatR * 0.18} x2={cx2} y2={cy2 - backH - seatR * 0.18} stroke={LINE_COLOR} strokeWidth="0.9" />
-
-        {/* Round seat — front view shows as rectangle */}
         <rect x={cx2 - seatR} y={cy2 - seatR * 0.18} width={seatR * 2} height={8} fill="none" stroke={LINE_COLOR} strokeWidth="1.2" />
-        {/* Seat edge curve hint */}
         <ellipse cx={cx2} cy={cy2 - seatR * 0.18 + 8} rx={seatR} ry={5} fill="none" stroke={LINE_COLOR} strokeWidth="0.6" strokeDasharray="3 2" opacity="0.5" />
-
-        {/* Gas lift column */}
         <rect x={cx2 - colW / 2} y={cy2 - seatR * 0.18 + 8} width={colW} height={colH} fill="none" stroke={LINE_COLOR} strokeWidth="1.1" />
-        {/* Column cap (wider at top) */}
         <rect x={cx2 - colW * 0.9} y={cy2 - seatR * 0.18 + 5} width={colW * 1.8} height={5} fill="none" stroke={LINE_COLOR} strokeWidth="0.8" />
-
-        {/* Footrest ring */}
         <ellipse cx={cx2} cy={cy2 - seatR * 0.18 + 8 + colH * 0.42} rx={seatR * 0.65} ry={5} fill="none" stroke={LINE_COLOR} strokeWidth="1" />
-
-        {/* 5-star base — show 3 visible arms in front view */}
         {[-1, 0, 1].map((offset, i) => (
           <line key={i}
             x1={cx2 + offset * baseArmL * 0.6} y1={cy2 - seatR * 0.18 + 8 + colH - 4}
             x2={cx2 + offset * baseArmL} y2={cy2 - seatR * 0.18 + 8 + colH + 5}
             stroke={LINE_COLOR} strokeWidth="1.1" />
         ))}
-        {/* Base hub */}
         <ellipse cx={cx2} cy={cy2 - seatR * 0.18 + 8 + colH} rx={12} ry={4} fill="none" stroke={LINE_COLOR} strokeWidth="0.9" />
-        {/* Castors */}
         {[-1, 0, 1].map((offset, i) => (
           <circle key={i} cx={cx2 + offset * baseArmL} cy={cy2 - seatR * 0.18 + 8 + colH + 5 + casR} r={casR} fill="none" stroke={LINE_COLOR} strokeWidth="0.9" />
         ))}
-
-        {/* Dims */}
         <DimLine x1={cx2 - seatR - 14} y1={cy2 - seatR * 0.18} x2={cx2 - seatR - 14} y2={cy2 - seatR * 0.18 + 8 + colH + casR * 2 + 10} label="500 mm" labelX={cx2 - seatR - 30} labelY={cy2 + colH / 2} vertical />
-        <DimLine x1={cx2 - seatR} y1={cy2 - seatR * 0.18 - 14} x2={cx2 + seatR} y2={cy2 - seatR * 0.18 - 14} label="Ø450 mm seat" labelX={cx2} labelY={cy2 - seatR * 0.18 - 22} />
+        <DimLine x1={cx2 - seatR} y1={cy2 - seatR * 0.18 - 14} x2={cx2 + seatR} y2={cy2 - seatR * 0.18 - 14} label="\u00d8450 mm seat" labelX={cx2} labelY={cy2 - seatR * 0.18 - 22} />
         <DimLine x1={cx2 + backW / 2 + 14} y1={cy2 - backH - seatR * 0.18} x2={cx2 + backW / 2 + 14} y2={cy2 - seatR * 0.18} label="380 mm" labelX={cx2 + backW / 2 + 30} labelY={cy2 - backH / 2 - seatR * 0.09} vertical />
-        <text x={cx2} y={cy2 - seatR * 0.18 + 8 + colH + casR * 2 + 32} fill={TEXT_COLOR} fontSize="7" fontFamily="'DM Sans',monospace" textAnchor="middle" opacity="0.6">FRONT VIEW — 304/316L SS CLEANROOM CHAIR — 5-STAR BASE — ESD CASTORS</text>
+        <text x={cx2} y={cy2 - seatR * 0.18 + 8 + colH + casR * 2 + 32} fill={TEXT_COLOR} fontSize="7" fontFamily="'DM Sans',monospace" textAnchor="middle" opacity="0.6">FRONT VIEW \u2014 304/316L SS CLEANROOM CHAIR \u2014 5-STAR BASE \u2014 ESD CASTORS</text>
       </g>
     )
   } else {
@@ -670,9 +673,7 @@ function Drawing2D({ modelType, shapeDims, meta, isPending = false }: { modelTyp
   )
 }
 
-
-// ── Pharma-grade SS Table ─────────────────────────────────────────────────
-function PharmaTableModel({ dims, ar, wireframe, heatmap }: { dims: ShapeDimensions; ar: boolean; wireframe: boolean; heatmap: boolean }) {
+function PharmaTableModel({ dims, ar, wireframe }: { dims: ShapeDimensions; ar: boolean; wireframe: boolean }) {
   const ref = useRef<THREE.Group>(null)
   useFrame((_, d) => { if (ref.current && ar) ref.current.rotation.y += d * 0.3 })
 
@@ -688,31 +689,24 @@ function PharmaTableModel({ dims, ar, wireframe, heatmap }: { dims: ShapeDimensi
   const legR = 0.055, topThick = 0.045, legH = H - topThick
   const legOffX = W / 2 - 0.12, legOffZ = D / 2 - 0.10
 
-  // Position group so table sits on y=0 plane (grid)
-  // legs go from y=0 to y=legH, tabletop at y=legH
   return (
     <group ref={ref} position={[0, -legH / 2 - topThick / 2, 0]}>
-      {/* Tabletop */}
       <mesh material={mat} position={[0, legH + topThick / 2, 0]}>
         <boxGeometry args={[W, topThick, D]} />
       </mesh>
-      {/* Undershelf at 35% leg height */}
       <mesh material={matDark} position={[0, legH * 0.38, 0]}>
         <boxGeometry args={[W - 0.12, topThick * 0.6, D - 0.12]} />
       </mesh>
-      {/* 4 legs — bottom at y=0, top at y=legH */}
       {([[-1,-1],[1,-1],[1,1],[-1,1]] as [number,number][]).map(([sx, sz], i) => (
         <mesh key={i} material={matDark} position={[sx * legOffX, legH / 2, sz * legOffZ]}>
           <cylinderGeometry args={[legR, legR * 1.1, legH, 16]} />
         </mesh>
       ))}
-      {/* Adjustable feet at bottom */}
       {([[-1,-1],[1,-1],[1,1],[-1,1]] as [number,number][]).map(([sx, sz], i) => (
         <mesh key={`foot-${i}`} material={mat} position={[sx * legOffX, 0.03, sz * legOffZ]}>
           <cylinderGeometry args={[legR * 1.6, legR * 1.6, 0.05, 16]} />
         </mesh>
       ))}
-      {/* Side cross braces */}
       <mesh material={matDark} position={[0, legH * 0.35,  legOffZ]}>
         <boxGeometry args={[W - 0.24, 0.025, 0.025]} />
       </mesh>
@@ -723,8 +717,7 @@ function PharmaTableModel({ dims, ar, wireframe, heatmap }: { dims: ShapeDimensi
   )
 }
 
-// ── Pharma-grade SS Chair ─────────────────────────────────────────────────
-function PharmaChairModel({ ar, wireframe, heatmap }: { ar: boolean; wireframe: boolean; heatmap: boolean }) {
+function PharmaChairModel({ ar, wireframe }: { ar: boolean; wireframe: boolean }) {
   const ref = useRef<THREE.Group>(null)
   useFrame((_, d) => { if (ref.current && ar) ref.current.rotation.y += d * 0.4 })
 
@@ -742,19 +735,15 @@ function PharmaChairModel({ ar, wireframe, heatmap }: { ar: boolean; wireframe: 
 
   return (
     <group ref={ref} position={[0, -seatY / 2 - 0.1, 0]}>
-      {/* Round seat */}
       <mesh material={mat} position={[0, seatY, 0]}>
         <cylinderGeometry args={[seatR, seatR * 0.95, 0.06, 32]} />
       </mesh>
-      {/* Gas-lift column */}
       <mesh material={matDark} position={[0, colH / 2 + 0.1, 0]}>
         <cylinderGeometry args={[colR, colR * 0.85, colH, 16]} />
       </mesh>
-      {/* Column top cap */}
       <mesh material={mat} position={[0, colH + 0.1, 0]}>
         <cylinderGeometry args={[colR * 1.4, colR * 1.4, 0.04, 16]} />
       </mesh>
-      {/* 5-star base */}
       {starAngles.map((angle, i) => (
         <mesh key={i} material={matDark}
           position={[Math.cos(angle) * armLen / 2, 0.06, Math.sin(angle) * armLen / 2]}
@@ -762,11 +751,9 @@ function PharmaChairModel({ ar, wireframe, heatmap }: { ar: boolean; wireframe: 
           <boxGeometry args={[armLen, 0.035, 0.05]} />
         </mesh>
       ))}
-      {/* Central hub */}
       <mesh material={matDark} position={[0, 0.06, 0]}>
         <cylinderGeometry args={[0.10, 0.10, 0.04, 16]} />
       </mesh>
-      {/* Castors */}
       {starAngles.map((angle, i) => (
         <mesh key={`c-${i}`} material={mat}
           position={[Math.cos(angle) * (armLen - 0.05), 0.035, Math.sin(angle) * (armLen - 0.05)]}>
@@ -793,30 +780,16 @@ function ToolBtn({ icon, label, active, onClick }: { icon: React.ReactNode; labe
   )
 }
 
-export default function ModelViewer({ onClose, modelType = 'empty', pendingModel = 'empty', isGenerating = false, shapeDims = {}, heatmap: heatmapProp, onHeatmapToggle, cadUrls = null }: ModelViewerProps) {
+export default function ModelViewer({ onClose, modelType = 'empty', pendingModel = 'empty', isGenerating = false, shapeDims = {}, heatmap: heatmapProp, onHeatmapToggle, cadUrls = null, stlUrl = null, realSpecs = null }: ModelViewerProps) {
   const [wireframe, setWireframe]     = useState(false)
   const [heatmap, setHeatmap]         = useState(false)
   useEffect(() => { if (heatmapProp !== undefined) setHeatmap(heatmapProp) }, [heatmapProp])
 
-  const STRESS_ZONES: Record<string, { zone: string; label: string }[]> = {
-    spur_gear:    [{ zone: 'critical', label: 'Root fillet — max bending stress' }, { zone: 'high', label: 'Pitch line contact' }, { zone: 'medium', label: 'Tooth flank' }, { zone: 'low', label: 'Tooth tip' }, { zone: 'safe', label: 'Gear body / hub' }],
-    helical_gear: [{ zone: 'critical', label: 'Root fillet — helical contact' }, { zone: 'high', label: 'Lead entry zone' }, { zone: 'medium', label: 'Flank contact band' }, { zone: 'low', label: 'Tooth tip' }, { zone: 'safe', label: 'Gear body' }],
-    shaft:        [{ zone: 'critical', label: 'Keyway stress concentration' }, { zone: 'high', label: 'Shoulder fillet — bearing seat' }, { zone: 'medium', label: 'Mid-span bending zone' }, { zone: 'low', label: 'Shaft body' }, { zone: 'safe', label: 'End sections' }],
-    bearing:      [{ zone: 'critical', label: 'Inner race contact patch' }, { zone: 'high', label: 'Ball-raceway interface' }, { zone: 'medium', label: 'Outer race contact' }, { zone: 'low', label: 'Cage' }, { zone: 'safe', label: 'Housing shoulder' }],
-    bolt:         [{ zone: 'critical', label: 'Thread root — first engaged' }, { zone: 'high', label: 'Shank-to-head fillet' }, { zone: 'medium', label: 'Thread engagement zone' }, { zone: 'low', label: 'Shank body' }, { zone: 'safe', label: 'Head bearing face' }],
-    cube:         [{ zone: 'critical', label: 'Corner stress concentration' }, { zone: 'high', label: 'Edge load zone' }, { zone: 'medium', label: 'Face centre' }, { zone: 'low', label: 'Body' }, { zone: 'safe', label: 'Supported faces' }],
-    rectangle:    [{ zone: 'critical', label: 'Corner concentration' }, { zone: 'high', label: 'Long edge bending' }, { zone: 'medium', label: 'Face centre' }, { zone: 'low', label: 'Body' }, { zone: 'safe', label: 'Base' }],
-    sphere:       [{ zone: 'critical', label: 'Pole — max hoop stress' }, { zone: 'high', label: 'Upper hemisphere' }, { zone: 'medium', label: 'Equatorial band' }, { zone: 'low', label: 'Lower hemisphere' }, { zone: 'safe', label: 'Base contact' }],
-    cylinder:     [{ zone: 'critical', label: 'End cap junction' }, { zone: 'high', label: 'Bore pressure wall' }, { zone: 'medium', label: 'Mid-body hoop' }, { zone: 'low', label: 'Outer wall' }, { zone: 'safe', label: 'End supports' }],
-    pharma_table: [{ zone: 'critical', label: 'Leg-to-top weld joint' }, { zone: 'high', label: 'Tabletop centre span' }, { zone: 'medium', label: 'Cross brace connection' }, { zone: 'low', label: 'Leg mid-section' }, { zone: 'safe', label: 'Adjustable feet' }],
-    pharma_chair: [{ zone: 'critical', label: 'Column-to-base junction' }, { zone: 'high', label: 'Star arm root' }, { zone: 'medium', label: 'Seat-to-column interface' }, { zone: 'low', label: 'Star arm body' }, { zone: 'safe', label: 'Castor housings' }],
-  }
   const [gridVisible, setGrid]        = useState(true)
   const [autoRotate, setAutoRotate]   = useState(false)
   const [show2D, setShow2D]           = useState(false)
   const [zoomDelta, setZoomDelta]     = useState(0)
   const [dots, setDots]               = useState('.')
-  // Each export/feature button now has its own toast message instead of one shared flag
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const controlsRef = useRef<any>(null)
   const sceneRef    = useRef<THREE.Scene | null>(null)
@@ -886,6 +859,10 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
       downloadFile(cadUrls.stl_url, `${MODEL_META[modelType]?.label?.replace(/ /g, '_') ?? 'model'}.stl`)
       return
     }
+    if (stlUrl) {
+      downloadFile(stlUrl, `${MODEL_META[modelType]?.label?.replace(/ /g, '_') ?? 'model'}.stl`)
+      return
+    }
     if (!sceneRef.current) return
     const exporter = new STLExporter()
     const stl = exporter.parse(sceneRef.current, { binary: false })
@@ -896,13 +873,13 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
     a.download = `${MODEL_META[modelType]?.label?.replace(/ /g, '_') ?? 'model'}.stl`
     a.click()
     URL.revokeObjectURL(url)
-  }, [modelType, cadUrls, downloadFile])
+  }, [modelType, cadUrls, stlUrl, downloadFile])
 
   const handleExportSTEP = useCallback(() => {
     if (cadUrls?.step_url) {
       downloadFile(cadUrls.step_url, `${MODEL_META[modelType]?.label?.replace(/ /g, '_') ?? 'model'}.step`)
     } else {
-      showToast('STEP export — coming soon')
+      showToast('STEP export \u2014 coming soon')
     }
   }, [cadUrls, modelType, downloadFile, showToast])
 
@@ -910,24 +887,25 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
     if (cadUrls?.dxf_url) {
       downloadFile(cadUrls.dxf_url, `${MODEL_META[modelType]?.label?.replace(/ /g, '_') ?? 'model'}.dxf`)
     } else {
-      showToast('DXF export — coming soon')
+      showToast('DXF export \u2014 coming soon')
     }
   }, [cadUrls, modelType, downloadFile, showToast])
 
   const handleHeatmapClick = useCallback(() => {
-    showToast('Stress heatmap — available when compute backend is connected')
+    showToast('Stress heatmap \u2014 available when compute backend is connected')
   }, [showToast])
 
   const meta = MODEL_META[modelType]
   const isEmpty = modelType === 'empty' && pendingModel === 'empty'
+  const hasRealStl = Boolean(stlUrl)
 
   const displaySpecs = useMemo(() => {
     if (modelType === 'cube' && shapeDims.width) return [
       { label: 'Side', value: `${shapeDims.width} mm` },
-      { label: 'Volume', value: `${Math.pow(shapeDims.width, 3).toLocaleString()} mm³` },
+      { label: 'Volume', value: `${Math.pow(shapeDims.width, 3).toLocaleString()} mm\u00b3` },
     ]
     if (modelType === 'rectangle' && shapeDims.width) return [
-      { label: 'W × H × D', value: `${shapeDims.width} × ${shapeDims.height ?? '—'} × ${shapeDims.depth ?? '—'} mm` },
+      { label: 'W \u00d7 H \u00d7 D', value: `${shapeDims.width} \u00d7 ${shapeDims.height ?? '\u2014'} \u00d7 ${shapeDims.depth ?? '\u2014'} mm` },
     ]
     if (modelType === 'sphere' && shapeDims.radius) return [
       { label: 'Radius', value: `${shapeDims.radius} mm` },
@@ -935,7 +913,7 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
     ]
     if (modelType === 'cylinder' && shapeDims.radius) return [
       { label: 'Radius', value: `${shapeDims.radius} mm` },
-      { label: 'Length', value: `${shapeDims.length ?? '—'} mm` },
+      { label: 'Length', value: `${shapeDims.length ?? '\u2014'} mm` },
     ]
     return meta.specs
   }, [modelType, shapeDims, meta.specs])
@@ -943,7 +921,6 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
   return (
     <div style={{ width: '100%', height: '100%', backgroundColor: '#080e1a', display: 'flex', flexDirection: 'column' }}>
 
-      {/* ── Toolbar ── */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 13px', flexShrink: 0, backgroundColor: 'transparent' }}>
         <span style={{ fontSize: '10px', fontWeight: 600, color: '#4a5568', fontFamily: F, letterSpacing: '1.2px', minWidth: '130px', textTransform: 'uppercase' }}>
           {isGenerating ? `Generating${dots}` : (meta.label || '3D Model Viewer')}
@@ -953,13 +930,13 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
           <ToolBtn icon={<Save size={12} />}     label="Save spec (JSON)" onClick={handleSave} />
           <ToolBtn icon={<Download size={12} />} label="Export PNG"       onClick={handleExport} />
           <ToolBtn icon={<span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '-0.01em', lineHeight: 1 }}>STL</span>} label="Export STL"            onClick={handleExportSTL} />
-          <ToolBtn icon={<span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '-0.01em', lineHeight: 1 }}>STP</span>} label={cadUrls?.step_url ? 'Export STEP' : 'Export STEP — coming soon'} onClick={handleExportSTEP} />
-          <ToolBtn icon={<span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '-0.01em', lineHeight: 1 }}>DXF</span>} label={cadUrls?.dxf_url ? 'Export DXF' : 'Export DXF — coming soon'} onClick={handleExportDXF} />
+          <ToolBtn icon={<span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '-0.01em', lineHeight: 1 }}>STP</span>} label={cadUrls?.step_url ? 'Export STEP' : 'Export STEP \u2014 coming soon'} onClick={handleExportSTEP} />
+          <ToolBtn icon={<span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '-0.01em', lineHeight: 1 }}>DXF</span>} label={cadUrls?.dxf_url ? 'Export DXF' : 'Export DXF \u2014 coming soon'} onClick={handleExportDXF} />
           <ToolBtn icon={<RotateCcw size={12} />} label="Reset view"  onClick={handleReset} />
           <ToolBtn icon={<ZoomIn size={12} />}    label="Zoom in"     onClick={() => setZoomDelta(1.5)} />
           <ToolBtn icon={<ZoomOut size={12} />}   label="Zoom out"    onClick={() => setZoomDelta(-1.5)} />
           <ToolBtn icon={<Box size={12} />}       label="Wireframe"   active={wireframe}   onClick={() => setWireframe(w => !w)} />
-          <ToolBtn icon={<span style={{ fontSize: '10px' }}>🌡</span>} label="Stress heatmap" active={false} onClick={handleHeatmapClick} />
+          <ToolBtn icon={<span style={{ fontSize: '10px' }}>\ud83c\udf21</span>} label="Stress heatmap" active={false} onClick={handleHeatmapClick} />
           <ToolBtn icon={<Grid3x3 size={12} />}   label="Toggle grid" active={gridVisible} onClick={() => setGrid(g => !g)} />
         </div>
 
@@ -970,10 +947,8 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
         ><X size={12} /></button>
       </div>
 
-      {/* ── Canvas area ── */}
       <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
 
-        {/* ── Empty state ── */}
         {isEmpty && !isGenerating && <EmptyState />}
 
         {isGenerating && (
@@ -1029,19 +1004,24 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
               <pointLight       position={[0, 5, 4]}    intensity={1.6} color="#ffffff" />
               <pointLight       position={[-4, 2, 2]}   intensity={0.9} color="#c8dcff" />
               <InfiniteGrid visible={gridVisible} />
-              {modelType === 'spur_gear'    && <SpurGearModel    ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
-              {modelType === 'helical_gear' && <HelicalGearModel ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
-              {modelType === 'shaft'        && <ShaftModel       ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
-              {modelType === 'bearing'      && <BearingModel     ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
-              {modelType === 'bolt'         && <BoltModel        ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
-              {modelType === 'cube'         && <CubeModel        dims={shapeDims} ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
-              {modelType === 'rectangle'    && <RectangleModel   dims={shapeDims} ar={autoRotate} wireframe={wireframe} />}
-              {modelType === 'sphere'       && <SphereModel      dims={shapeDims} ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
-              {modelType === 'cylinder'     && <CylinderModel    dims={shapeDims} ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
-              {modelType === 'pharma_table' && <PharmaTableModel dims={shapeDims} ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
-              {modelType === 'pharma_chair' && <PharmaChairModel ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
-    
-          {zoomDelta !== 0 && <CameraZoom delta={zoomDelta} onDone={() => setZoomDelta(0)} />}
+              {hasRealStl ? (
+                <RealSTLModel url={stlUrl!} ar={autoRotate} wireframe={wireframe} />
+              ) : (
+                <>
+                  {modelType === 'spur_gear'    && <SpurGearModel    ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
+                  {modelType === 'helical_gear' && <HelicalGearModel ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
+                  {modelType === 'shaft'        && <ShaftModel       ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
+                  {modelType === 'bearing'      && <BearingModel     ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
+                  {modelType === 'bolt'         && <BoltModel        ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
+                  {modelType === 'cube'         && <CubeModel        dims={shapeDims} ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
+                  {modelType === 'rectangle'    && <RectangleModel   dims={shapeDims} ar={autoRotate} wireframe={wireframe} />}
+                  {modelType === 'sphere'       && <SphereModel      dims={shapeDims} ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
+                  {modelType === 'cylinder'     && <CylinderModel    dims={shapeDims} ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
+                  {modelType === 'pharma_table' && <PharmaTableModel dims={shapeDims} ar={autoRotate} wireframe={wireframe} />}
+                  {modelType === 'pharma_chair' && <PharmaChairModel ar={autoRotate} wireframe={wireframe} />}
+                </>
+              )}
+              {zoomDelta !== 0 && <CameraZoom delta={zoomDelta} onDone={() => setZoomDelta(0)} />}
               <OrbitControls
                 ref={controlsRef}
                 enablePan enableZoom enableRotate
@@ -1060,8 +1040,6 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
           </Canvas>
         </div>
 
-
-
         {toastMessage && (
           <div style={{ position: 'absolute', bottom: 52, left: '50%', transform: 'translateX(-50%)', background: 'rgba(12,20,34,0.97)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '9px 18px', zIndex: 20, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 10, animation: 'fadeSlideUp 0.2s ease' }}>
             <span style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', fontFamily: F, letterSpacing: '0.1em', textTransform: 'uppercase' }}>COMING SOON</span>
@@ -1069,7 +1047,28 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
           </div>
         )}
 
-        {displaySpecs.length > 0 && !isGenerating && (
+        {hasRealStl && realSpecs && !isGenerating && (
+          <div style={{ position: 'absolute', bottom: '48px', left: '12px', backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: '8px', padding: '8px 12px', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.05)' }}>
+            {realSpecs.material && (
+              <div style={{ marginBottom: '6px', paddingBottom: '5px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                <span style={{ fontSize: '9px', color: '#63b3ed', fontFamily: F, fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{realSpecs.material}</span>
+              </div>
+            )}
+            {realSpecs.type && (
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '2px' }}>
+                <span style={{ fontSize: '10px', color: '#374151', fontFamily: F, width: '76px' }}>Type</span>
+                <span style={{ fontSize: '10px', color: '#94a3b8', fontFamily: F, fontWeight: 500 }}>{realSpecs.type}</span>
+              </div>
+            )}
+            {realSpecs.dimensions && (
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '2px' }}>
+                <span style={{ fontSize: '10px', color: '#374151', fontFamily: F, width: '76px' }}>Dimensions</span>
+                <span style={{ fontSize: '10px', color: '#94a3b8', fontFamily: F, fontWeight: 500 }}>{realSpecs.dimensions}</span>
+              </div>
+            )}
+          </div>
+        )}
+        {displaySpecs.length > 0 && !isGenerating && !hasRealStl && (
           <div style={{ position: 'absolute', bottom: '48px', left: '12px', backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: '8px', padding: '8px 12px', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.05)' }}>
             {meta.material && (
               <div style={{ marginBottom: '6px', paddingBottom: '5px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
@@ -1089,8 +1088,8 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
       <div style={{ padding: '6px 13px', borderTop: '1px solid rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, backgroundColor: 'transparent' }}>
         <div style={{ display: 'flex', gap: '18px' }}>
           {(autoRotate
-            ? ['Click ▶ to stop', 'Orbit disabled in showcase']
-            : ['Left drag — rotate', 'Right drag — pan', 'Scroll — zoom']
+            ? ['Click \u25b6 to stop', 'Orbit disabled in showcase']
+            : ['Left drag \u2014 rotate', 'Right drag \u2014 pan', 'Scroll \u2014 zoom']
           ).map(h => (
             <span key={h} style={{ fontSize: '10px', color: '#1e2d40', fontFamily: F }}>{h}</span>
           ))}

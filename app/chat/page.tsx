@@ -60,12 +60,9 @@ function DownloadButtons({ urls, darkMode }: { urls: CadUrls; darkMode: boolean 
   )
 }
 
-// Conversations loaded from backend — replaces static ALL_CHATS
 const EMPTY_CHATS: { id: string; title: string; time: string }[] = []
 
 function splitLines(text: string): string[] {
-  // Split on blank-line boundaries so each chunk is a complete markdown block
-  // (a full paragraph, a full heading, a full list) rather than a sentence fragment.
   return text
     .split(/\n\s*\n/)
     .map(block => block.trim())
@@ -251,6 +248,8 @@ export default function ChatPage() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeModel, setActiveModel] = useState<ModelType>('empty')
+  const [currentStlUrl, setCurrentStlUrl] = useState<string | null>(null)
+  const [realSpecs, setRealSpecs] = useState<{ type: string; dimensions: string; material: string } | null>(null)
   const [pendingModel, setPendingModel] = useState<ModelType>('empty')
   const [shapeDims, setShapeDims] = useState<ShapeDimensions>({})
   const [currentCadUrls, setCurrentCadUrls] = useState<CadUrls | null>(null)
@@ -316,7 +315,6 @@ export default function ChatPage() {
     }
   }, [])
 
-  // ── Load conversation history from backend ──
   useEffect(() => {
     if (!session?.user?.id) return
     fetch(`${CONVERSATIONS_API}/${session.user.id}`)
@@ -330,7 +328,7 @@ export default function ChatPage() {
         }))
         setConversations(formatted)
       })
-      .catch(() => {}) // silently fail — sidebar just stays empty
+      .catch(() => {})
   }, [session?.user?.id])
 
   function formatConversationTime(iso: string): string {
@@ -346,14 +344,12 @@ export default function ChatPage() {
     return `${days}d ago`
   }
 
-  // ── Load a specific conversation by ID ──
   const loadConversation = useCallback(async (conversationId: string) => {
     if (!session?.user?.id) return
     try {
       const res = await fetch(`${CONVERSATIONS_API}/${session.user.id}/${conversationId}`)
       if (!res.ok) return
       const data = await res.json()
-      // data.messages: [{ role, content }]
       if (!Array.isArray(data.messages)) return
       const loaded: ChatMessage[] = data.messages.map((m: { role: string; content: string }) => ({
         role: m.role as 'user' | 'assistant',
@@ -397,7 +393,6 @@ export default function ChatPage() {
     setIsGenerating(false); setActiveModel(model)
   }, [])
 
-  // ── Core sendMessage: calls /chat endpoint ──
   const sendMessage = useCallback(async (text: string) => {
     const trimmed = text.trim()
     if (!trimmed || isStreaming) return
@@ -409,7 +404,6 @@ export default function ChatPage() {
     abortRef.current = false
     trackMessage(trimmed)
 
-    // Placeholder assistant message so the status indicator shows immediately during the network wait
     setMessages(prev => [...prev, { role: 'assistant', lines: [], visibleLines: 0 } as AssistantMessage])
 
     try {
@@ -426,12 +420,9 @@ export default function ChatPage() {
       if (!response.ok) throw new Error(`Server error: ${response.status}`)
 
       const data = await response.json()
-      // data shape: { text, has_stl, stl_url, step_url, dxf_url, conversation_id }
 
-      // Save conversation_id for subsequent messages
       if (data.conversation_id) {
         setCurrentConversationId(data.conversation_id)
-        // Add to conversations list if it's a new one
         setConversations(prev => {
           const exists = prev.find(c => c.id === data.conversation_id)
           if (exists) return prev
@@ -439,7 +430,7 @@ export default function ChatPage() {
         })
       }
 
-      const lines = splitLines(data.text ?? 'No response received.')
+      const lines = splitLines(data.response ?? 'No response received.')
 
       const cadUrls: CadUrls = {
         stl_url:  data.stl_url  ?? null,
@@ -451,15 +442,22 @@ export default function ChatPage() {
         setCurrentCadUrls(cadUrls)
       }
 
-      // If backend generated a CAD file, open the 3D viewer
       if (data.has_stl) {
         setViewerOpen(true)
         setIsGenerating(true)
         setActiveModel('empty')
+        setCurrentStlUrl(data.stl_url ?? null)
+        const specMatch = data.response.match(/type:\s*(.+)/i)
+        const dimsMatch = data.response.match(/dimensions:\s*(.+)/i)
+        const materialMatch = data.response.match(/material:\s*(.+)/i)
+        setRealSpecs({
+          type: specMatch ? specMatch[1].trim() : '',
+          dimensions: dimsMatch ? dimsMatch[1].trim() : '',
+          material: materialMatch ? materialMatch[1].trim() : '',
+        })
         setTimeout(() => {
           setIsGenerating(false)
-          // Infer a local ModelType from response text for the 3D preview
-          const tl = (data.text ?? '').toLowerCase()
+          const tl = (data.response ?? '').toLowerCase()
           let inferred: ModelType = 'cube'
           if (tl.includes('spur gear'))                           inferred = 'spur_gear'
           else if (tl.includes('helical'))                        inferred = 'helical_gear'
@@ -473,7 +471,6 @@ export default function ChatPage() {
         }, 2800)
       }
 
-      // Replace the placeholder assistant message with the real response
       setMessages(prev => {
         const u = [...prev]
         u[u.length - 1] = {
@@ -485,7 +482,6 @@ export default function ChatPage() {
         return u
       })
 
-      // Stream lines in one by one
       for (let i = 0; i < lines.length; i++) {
         if (abortRef.current) break
         await new Promise(r => setTimeout(r, i === 0 ? 280 : 380))
@@ -635,7 +631,6 @@ export default function ChatPage() {
         onSelectChat={loadConversation}
       />
 
-      {/* 3D Viewer */}
       <div style={{ position: 'fixed', top: 0, right: viewerOpen ? 0 : -(viewerWidth + 10), width: viewerWidth, height: '100vh', zIndex: 100, transition: isDragging ? 'none' : 'right 0.45s cubic-bezier(0.16,1,0.3,1)', willChange: 'right', display: 'flex' }}>
         {viewerOpen && (
           <div onMouseDown={handleDragStart} style={{ position: 'absolute', left: -16, top: 0, width: '32px', height: '100%', cursor: 'col-resize', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
@@ -670,14 +665,14 @@ export default function ChatPage() {
             isGenerating={isGenerating}
             shapeDims={shapeDims}
             cadUrls={currentCadUrls}
+            stlUrl={currentStlUrl}
+            realSpecs={realSpecs}
           />
         </div>
       </div>
 
-      {/* Main */}
       <main style={{ height: '100vh', backgroundColor: bg, display: 'flex', flexDirection: 'column', fontFamily: F, marginLeft: sidebarWidth, marginRight: viewerOpen ? viewerWidth : 0, transition: isDragging ? 'none' : 'margin-left 0.35s cubic-bezier(0.25,0.46,0.45,0.94), margin-right 0.4s cubic-bezier(0.25,0.46,0.45,0.94)', willChange: 'margin-left, margin-right', boxSizing: 'border-box', overflow: 'hidden' }}>
 
-        {/* Header */}
         <div style={{ position: 'relative', zIndex: 48, backgroundColor: bg, height: '52px', display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', padding: '0 20px', flexShrink: 0 }}>
           <div />
           <AppWordmark darkMode={dm} onClick={() => handleNavigate('home')} />
@@ -692,7 +687,6 @@ export default function ChatPage() {
           </div>
         </div>
 
-        {/* Home */}
         {page === 'home' && (
           <div key={chatKey} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
             {inChat ? (
@@ -733,7 +727,6 @@ export default function ChatPage() {
                                   )}
                                 </div>
                               )}
-                              {/* CAD download buttons intentionally not shown inline in chat — files are available in the 3D Model Viewer panel */}
                             </div>
                           </div>
                         )}
@@ -791,7 +784,6 @@ export default function ChatPage() {
           </div>
         )}
 
-        {/* Projects */}
         {page === 'projects' && (
           <ProjectsPage darkMode={dm} textPrimary={textPrimary} textMuted={textMuted} border={border} bg={bg} />
         )}
