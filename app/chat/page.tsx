@@ -186,7 +186,7 @@ function InputBar({ input, onChange, onKeyDown, onSend, onStop, isStreaming, pla
 interface SearchPanelProps {
   open: boolean; query: string; onChange: (v: string) => void; onClose: () => void
   chats: { id: string; title: string; time: string }[]; surface: string; border: string; textPrimary: string
-  textMuted: string; darkMode: boolean; inputRef: React.RefObject<HTMLInputElement>
+  textMuted: string; darkMode: boolean; inputRef: React.RefObject<HTMLInputElement | null>
   sidebarWidth: number; viewerWidth: number; viewerOpen: boolean
   onSelectChat: (id: string) => void
 }
