@@ -220,7 +220,9 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [viewerOpen, setViewerOpen] = useState(false)
-  const [viewerWidth, setViewerWidth] = useState(480)
+  const [viewerWidth, setViewerWidth] = useState(
+    typeof window !== 'undefined' ? Math.floor(window.innerWidth * 0.45) : 480
+  )
   const [isDragging, setIsDragging] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [page, setPage] = useState<'home' | 'projects'>('home')
@@ -553,7 +555,7 @@ export default function ChatPage() {
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes shimmer { 0%,100%{background-position:0% 50%} 50%{background-position:100% 50%} }
         * { font-family: ${F}; }
-        ::placeholder { color: rgba(255,255,255,0.22); font-weight: 300; }
+        ::placeholder { color: ${dm ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.32)'}; font-weight: 300; }
       `}</style>
 
       <Sidebar
@@ -579,28 +581,30 @@ export default function ChatPage() {
 
       {/* 3D Viewer */}
       <div style={{ position: 'fixed', top: 0, right: viewerOpen ? 0 : -(viewerWidth + 10), width: viewerWidth, height: '100vh', zIndex: 100, transition: isDragging ? 'none' : 'right 0.45s cubic-bezier(0.16,1,0.3,1)', willChange: 'right', display: 'flex' }}>
-        <div onMouseDown={handleDragStart} style={{ position: 'absolute', left: -16, top: 0, width: '32px', height: '100%', cursor: 'col-resize', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-          onMouseEnter={e => {
-            const line = e.currentTarget.querySelector('.drag-line') as HTMLElement
-            const icon = e.currentTarget.querySelector('.drag-icon') as HTMLElement
-            if (line) { line.style.backgroundColor = '#3b82f6'; line.style.boxShadow = '0 0 8px rgba(59,130,246,0.6)' }
-            if (icon) { icon.style.opacity = '1'; icon.style.borderColor = 'rgba(59,130,246,0.6)'; icon.style.backgroundColor = 'rgba(30,50,90,0.95)' }
-          }}
-          onMouseLeave={e => {
-            if (!isDragging) {
+        {viewerOpen && (
+          <div onMouseDown={handleDragStart} style={{ position: 'absolute', left: -16, top: 0, width: '32px', height: '100%', cursor: 'col-resize', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            onMouseEnter={e => {
               const line = e.currentTarget.querySelector('.drag-line') as HTMLElement
               const icon = e.currentTarget.querySelector('.drag-icon') as HTMLElement
-              if (line) { line.style.backgroundColor = dm ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'; line.style.boxShadow = 'none' }
-              if (icon) { icon.style.opacity = '0.7'; icon.style.borderColor = dm ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)'; icon.style.backgroundColor = dm ? 'rgba(20,30,50,0.9)' : 'rgba(240,242,245,0.95)' }
-            }
-          }}
-        >
-          <div className="drag-line" style={{ position: 'absolute', left: '50%', top: 0, transform: 'translateX(-50%)', width: '1px', height: '100%', backgroundColor: dm ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)', transition: 'background-color 0.2s, box-shadow 0.2s', pointerEvents: 'none' }} />
-          <div className="drag-icon" style={{ display: 'flex', gap: '3px', alignItems: 'center', justifyContent: 'center', padding: '8px 7px', borderRadius: '8px', zIndex: 11, position: 'relative', backgroundColor: dm ? 'rgba(20,30,50,0.9)' : 'rgba(240,242,245,0.95)', border: `1px solid ${dm ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)'}`, boxShadow: dm ? '0 2px 8px rgba(0,0,0,0.4)' : '0 2px 8px rgba(0,0,0,0.1)', opacity: 0.7, transition: 'opacity 0.2s, border-color 0.2s, background-color 0.2s', pointerEvents: 'none' }}>
-            <div style={{ width: '3px', height: '20px', borderRadius: '99px', backgroundColor: dm ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.4)' }} />
-            <div style={{ width: '3px', height: '20px', borderRadius: '99px', backgroundColor: dm ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.4)' }} />
+              if (line) { line.style.backgroundColor = '#3b82f6'; line.style.boxShadow = '0 0 8px rgba(59,130,246,0.6)' }
+              if (icon) { icon.style.opacity = '1'; icon.style.borderColor = 'rgba(59,130,246,0.6)'; icon.style.backgroundColor = 'rgba(30,50,90,0.95)' }
+            }}
+            onMouseLeave={e => {
+              if (!isDragging) {
+                const line = e.currentTarget.querySelector('.drag-line') as HTMLElement
+                const icon = e.currentTarget.querySelector('.drag-icon') as HTMLElement
+                if (line) { line.style.backgroundColor = dm ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'; line.style.boxShadow = 'none' }
+                if (icon) { icon.style.opacity = '0.7'; icon.style.borderColor = dm ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)'; icon.style.backgroundColor = dm ? 'rgba(20,30,50,0.9)' : 'rgba(240,242,245,0.95)' }
+              }
+            }}
+          >
+            <div className="drag-line" style={{ position: 'absolute', left: '50%', top: 0, transform: 'translateX(-50%)', width: '1px', height: '100%', backgroundColor: dm ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)', transition: 'background-color 0.2s, box-shadow 0.2s', pointerEvents: 'none' }} />
+            <div className="drag-icon" style={{ display: 'flex', gap: '3px', alignItems: 'center', justifyContent: 'center', padding: '8px 7px', borderRadius: '8px', zIndex: 11, position: 'relative', backgroundColor: dm ? 'rgba(20,30,50,0.9)' : 'rgba(240,242,245,0.95)', border: `1px solid ${dm ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)'}`, boxShadow: dm ? '0 2px 8px rgba(0,0,0,0.4)' : '0 2px 8px rgba(0,0,0,0.1)', opacity: 0.7, transition: 'opacity 0.2s, border-color 0.2s, background-color 0.2s', pointerEvents: 'none' }}>
+              <div style={{ width: '3px', height: '20px', borderRadius: '99px', backgroundColor: dm ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.4)' }} />
+              <div style={{ width: '3px', height: '20px', borderRadius: '99px', backgroundColor: dm ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.4)' }} />
+            </div>
           </div>
-        </div>
+        )}
         <div style={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
           <ModelViewer
             onClose={() => { setViewerOpen(false); setActiveModel('empty'); setPendingModel('empty') }}

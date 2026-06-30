@@ -41,13 +41,6 @@ function GoogleIcon() {
   )
 }
 
-function AppleIcon() {
-  return (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="#000">
-      <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.7 9.05 7.4c1.32.07 2.22.74 2.98.8 1.13-.23 2.22-.9 3.38-.81 1.43.12 2.5.68 3.2 1.76-2.93 1.75-2.24 5.61.43 6.74-.57 1.5-1.31 3-2 4.4zM13 3.5c.12 1.98-1.8 3.5-3.49 3.34C9.25 5.06 11.08 3.28 13 3.5z"/>
-    </svg>
-  )
-}
 
 function AuthContent() {
   const router = useRouter()
@@ -92,11 +85,9 @@ function AuthContent() {
     router.push('/chat')
   }
 
-  function socialAuth(provider: 'apple' | 'google') {
+  function socialAuth(provider: 'google') {
     if (provider === 'google') {
       signIn('google', { callbackUrl: '/chat' })
-    } else {
-      showToast('Apple sign-in coming soon')
     }
   }
 
@@ -207,7 +198,6 @@ function AuthContent() {
           {/* Social */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
             {[
-              { label: 'Apple',  icon: <AppleIcon />,  bg: '#fff', color: '#000',    key: 'apple'  as const },
               { label: 'Google', icon: <GoogleIcon />, bg: '#fff', color: '#1f2937', key: 'google' as const },
             ].map(s => (
               <button key={s.label} className="social-btn" onClick={() => socialAuth(s.key)} style={{

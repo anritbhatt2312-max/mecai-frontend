@@ -809,7 +809,8 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
   const [show2D, setShow2D]           = useState(false)
   const [zoomDelta, setZoomDelta]     = useState(0)
   const [dots, setDots]               = useState('.')
-  const [stepToast, setStepToast]     = useState(false)
+  // Each export/feature button now has its own toast message instead of one shared flag
+  const [toastMessage, setToastMessage] = useState<string | null>(null)
   const controlsRef = useRef<any>(null)
   const sceneRef    = useRef<THREE.Scene | null>(null)
 
@@ -825,6 +826,11 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
     if (pendingModel !== 'empty') setShow2D(true)
     else setShow2D(false)
   }, [pendingModel])
+
+  const showToast = useCallback((message: string) => {
+    setToastMessage(message)
+    setTimeout(() => setToastMessage(null), 3000)
+  }, [])
 
   const handleReset = useCallback(() => {
     setAutoRotate(false)
@@ -871,19 +877,16 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
   }, [modelType])
 
   const handleExportSTEP = useCallback(() => {
-    setStepToast(true)
-    setTimeout(() => setStepToast(false), 3000)
-  }, [])
+    showToast('STEP export — coming soon')
+  }, [showToast])
 
   const handleExportDXF = useCallback(() => {
-    setStepToast(true)
-    setTimeout(() => setStepToast(false), 3000)
-  }, [])
+    showToast('DXF export — coming soon')
+  }, [showToast])
 
-  const handleExportPDF = useCallback(() => {
-    setStepToast(true)
-    setTimeout(() => setStepToast(false), 3000)
-  }, [])
+  const handleHeatmapClick = useCallback(() => {
+    showToast('Stress heatmap — available when compute backend is connected')
+  }, [showToast])
 
   const meta = MODEL_META[modelType]
   const isEmpty = modelType === 'empty' && pendingModel === 'empty'
@@ -922,12 +925,11 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
           <ToolBtn icon={<span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '-0.01em', lineHeight: 1 }}>STL</span>} label="Export STL"            onClick={handleExportSTL} />
           <ToolBtn icon={<span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '-0.01em', lineHeight: 1 }}>STP</span>} label="Export STEP — coming soon" onClick={handleExportSTEP} />
           <ToolBtn icon={<span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '-0.01em', lineHeight: 1 }}>DXF</span>} label="Export DXF — coming soon" onClick={handleExportDXF} />
-          <ToolBtn icon={<span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '-0.01em', lineHeight: 1 }}>PDF</span>} label="Export PDF — coming soon" onClick={handleExportPDF} />
           <ToolBtn icon={<RotateCcw size={12} />} label="Reset view"  onClick={handleReset} />
           <ToolBtn icon={<ZoomIn size={12} />}    label="Zoom in"     onClick={() => setZoomDelta(1.5)} />
           <ToolBtn icon={<ZoomOut size={12} />}   label="Zoom out"    onClick={() => setZoomDelta(-1.5)} />
           <ToolBtn icon={<Box size={12} />}       label="Wireframe"   active={wireframe}   onClick={() => setWireframe(w => !w)} />
-          <ToolBtn icon={<span style={{ fontSize: '10px' }}>🌡</span>} label="Stress heatmap" active={false} onClick={() => setStepToast(true)} />
+          <ToolBtn icon={<span style={{ fontSize: '10px' }}>🌡</span>} label="Stress heatmap" active={false} onClick={handleHeatmapClick} />
           <ToolBtn icon={<Grid3x3 size={12} />}   label="Toggle grid" active={gridVisible} onClick={() => setGrid(g => !g)} />
           <ToolBtn icon={<Pencil size={12} />}    label="2D Drawing"  active={show2D}      onClick={() => setShow2D(s => !s)} />
         </div>
@@ -1031,10 +1033,10 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
 
 
 
-        {stepToast && (
+        {toastMessage && (
           <div style={{ position: 'absolute', bottom: 52, left: '50%', transform: 'translateX(-50%)', background: 'rgba(12,20,34,0.97)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '9px 18px', zIndex: 20, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 10, animation: 'fadeSlideUp 0.2s ease' }}>
             <span style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', fontFamily: F, letterSpacing: '0.1em', textTransform: 'uppercase' }}>COMING SOON</span>
-            <span style={{ fontSize: 11, color: '#94a3b8', fontFamily: F }}>Stress heatmap — available when compute backend is connected</span>
+            <span style={{ fontSize: 11, color: '#94a3b8', fontFamily: F }}>{toastMessage}</span>
           </div>
         )}
 
