@@ -139,7 +139,7 @@ interface InputBarProps {
   textPrimary: string
   textMuted: string
   darkMode: boolean
-  textareaRef: React.RefObject<HTMLTextAreaElement>
+  textareaRef: React.RefObject<HTMLTextAreaElement| null>
 }
 
 function InputBar({ input, onChange, onKeyDown, onSend, onStop, isStreaming, placeholder, disclaimer, textPrimary, textMuted, darkMode, textareaRef }: InputBarProps) {
