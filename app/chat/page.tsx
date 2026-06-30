@@ -7,6 +7,7 @@ import LoginTransition from '@/components/LoginTransition'
 import ProjectsPage from '@/components/ProjectsPage'
 import { useSmartSuggestions, trackMessage } from '@/hooks/useSmartSuggestions'
 import { ArrowUp, Paperclip, X, Search, StopCircle, Download } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
 import ModelViewer, { ModelType, ShapeDimensions } from '@/components/viewer/ModelViewer'
 import Sidebar, { SIDEBAR_EXPANDED, SIDEBAR_COLLAPSED, ThemePreference } from '@/components/sidebar/Sidebar'
 
@@ -64,6 +65,18 @@ const EMPTY_CHATS: { id: string; title: string; time: string }[] = []
 
 function splitLines(text: string): string[] {
   return text.split(/(?<=\.)\s+/).filter(l => l.trim().length > 0)
+}
+
+function detectStatusWord(prompt: string): string {
+  const p = prompt.toLowerCase()
+  const calcKeywords = ['calculate', 'stress', 'force', 'torque', 'load', 'pressure', 'strain', 'deflection', 'formula', 'equation', 'rpm', 'velocity', 'acceleration', 'fos', 'factor of safety', 'fea', 'fatigue']
+  const genKeywords = ['generate', 'create', 'design a', 'make a', 'build a', 'model a', 'show a', 'show me a']
+  const evalKeywords = ['compare', 'which material', 'best material', 'should i use', 'recommend', 'pros and cons', 'difference between', 'evaluate', 'analyse', 'analyze']
+
+  if (genKeywords.some(k => p.includes(k))) return 'Generating'
+  if (calcKeywords.some(k => p.includes(k))) return 'Calculating'
+  if (evalKeywords.some(k => p.includes(k))) return 'Evaluating'
+  return 'Thinking'
 }
 
 function AppWordmark({ darkMode, onClick }: { darkMode: boolean; onClick?: () => void }) {
@@ -219,6 +232,7 @@ export default function ChatPage() {
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
+  const [statusWord, setStatusWord] = useState('Thinking')
   const [viewerOpen, setViewerOpen] = useState(false)
   const [viewerWidth, setViewerWidth] = useState(
     typeof window !== 'undefined' ? Math.floor(window.innerWidth * 0.45) : 480
@@ -385,8 +399,12 @@ export default function ChatPage() {
 
     setMessages(prev => [...prev, { role: 'user', lines: [trimmed], visibleLines: 1 }])
     setIsStreaming(true)
+    setStatusWord(detectStatusWord(trimmed))
     abortRef.current = false
     trackMessage(trimmed)
+
+    // Placeholder assistant message so the status indicator shows immediately during the network wait
+    setMessages(prev => [...prev, { role: 'assistant', lines: [], visibleLines: 0 } as AssistantMessage])
 
     try {
       const response = await fetch(CHAT_API, {
@@ -445,13 +463,17 @@ export default function ChatPage() {
         }, 2800)
       }
 
-      // Add assistant message, attaching cadUrls only when has_stl is true
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        lines,
-        visibleLines: 0,
-        ...(data.has_stl ? { cadUrls } : {}),
-      } as AssistantMessage])
+      // Replace the placeholder assistant message with the real response
+      setMessages(prev => {
+        const u = [...prev]
+        u[u.length - 1] = {
+          role: 'assistant',
+          lines,
+          visibleLines: 0,
+          ...(data.has_stl ? { cadUrls } : {}),
+        } as AssistantMessage
+        return u
+      })
 
       // Stream lines in one by one
       for (let i = 0; i < lines.length; i++) {
@@ -468,7 +490,11 @@ export default function ChatPage() {
 
     } catch (err) {
       console.error('[MecAI] /chat error:', err)
-      setMessages(prev => [...prev, { role: 'assistant', lines: ['Something went wrong connecting to MecAI. Please try again.'], visibleLines: 1 }])
+      setMessages(prev => {
+        const u = [...prev]
+        u[u.length - 1] = { role: 'assistant', lines: ['Something went wrong connecting to MecAI. Please try again.'], visibleLines: 1 } as AssistantMessage
+        return u
+      })
     } finally {
       setIsStreaming(false)
     }
@@ -552,10 +578,20 @@ export default function ChatPage() {
         @keyframes fadeSlideIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes cardFadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
+        @keyframes statusPulse { 0%, 80%, 100% { opacity: 0.25; transform: scale(0.8); } 40% { opacity: 1; transform: scale(1); } }
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes shimmer { 0%,100%{background-position:0% 50%} 50%{background-position:100% 50%} }
         * { font-family: ${F}; }
         ::placeholder { color: ${dm ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.32)'}; font-weight: 300; }
+        .mecai-markdown p { margin: 0 0 4px 0; }
+        .mecai-markdown p:last-child { margin-bottom: 0; }
+        .mecai-markdown strong { font-weight: 600; }
+        .mecai-markdown em { font-style: italic; }
+        .mecai-markdown ul, .mecai-markdown ol { margin: 4px 0; padding-left: 20px; }
+        .mecai-markdown li { margin-bottom: 2px; }
+        .mecai-markdown h1, .mecai-markdown h2, .mecai-markdown h3 { font-weight: 600; margin: 8px 0 4px 0; font-size: 1em; text-transform: none; }
+        .mecai-markdown code { background: ${dm ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}; padding: 1px 5px; border-radius: 4px; font-size: 0.9em; }
+        .mecai-markdown a { color: #1739E5; text-decoration: underline; }
       `}</style>
 
       <Sidebar
@@ -655,18 +691,28 @@ export default function ChatPage() {
                             <MecAvatar />
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <span style={{ fontSize: '9px', fontWeight: 500, color: textMuted, fontFamily: F, letterSpacing: '0.12em', textTransform: 'uppercase', display: 'block', marginBottom: '8px' }}>MecAI</span>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                                {msg.lines.slice(0, msg.visibleLines).map((line, li) => (
-                                  <span key={li} style={{ fontSize: '16px', fontWeight: 300, lineHeight: '1.8', color: textPrimary, fontFamily: F, display: 'block', animation: 'fadeSlideIn 0.35s ease forwards' }}>{line}</span>
-                                ))}
-                                {isStreaming && i === messages.length - 1 && msg.visibleLines < msg.lines.length && (
-                                  <span style={{ display: 'inline-block', width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#0a1628', marginTop: '6px', animation: 'blink 0.8s infinite' }} />
-                                )}
-                              </div>
-                              {/* Download buttons — shown when backend returns has_stl: true */}
-                              {'cadUrls' in msg && msg.cadUrls && (i < messages.length - 1 || !isStreaming) && (
-                                <DownloadButtons urls={(msg as AssistantMessage).cadUrls!} darkMode={dm} />
+                              {msg.visibleLines === 0 && isStreaming && i === messages.length - 1 ? (
+                                <span style={{ fontSize: '13px', fontWeight: 400, color: textMuted, fontFamily: F, letterSpacing: '0.01em', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                  {statusWord}
+                                  <span style={{ display: 'inline-flex', gap: '2px' }}>
+                                    <span style={{ width: '3px', height: '3px', borderRadius: '50%', backgroundColor: textMuted, animation: 'statusPulse 1.2s ease-in-out infinite', animationDelay: '0s' }} />
+                                    <span style={{ width: '3px', height: '3px', borderRadius: '50%', backgroundColor: textMuted, animation: 'statusPulse 1.2s ease-in-out infinite', animationDelay: '0.2s' }} />
+                                    <span style={{ width: '3px', height: '3px', borderRadius: '50%', backgroundColor: textMuted, animation: 'statusPulse 1.2s ease-in-out infinite', animationDelay: '0.4s' }} />
+                                  </span>
+                                </span>
+                              ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                  {msg.lines.slice(0, msg.visibleLines).map((line, li) => (
+                                    <div key={li} className="mecai-markdown" style={{ fontSize: '16px', fontWeight: 300, lineHeight: '1.8', color: textPrimary, fontFamily: F, animation: 'fadeSlideIn 0.35s ease forwards' }}>
+                                      <ReactMarkdown>{line}</ReactMarkdown>
+                                    </div>
+                                  ))}
+                                  {isStreaming && i === messages.length - 1 && msg.visibleLines < msg.lines.length && (
+                                    <span style={{ display: 'inline-block', width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#0a1628', marginTop: '6px', animation: 'blink 0.8s infinite' }} />
+                                  )}
+                                </div>
                               )}
+                              {/* CAD download buttons intentionally not shown inline in chat — files are available in the 3D Model Viewer panel */}
                             </div>
                           </div>
                         )}

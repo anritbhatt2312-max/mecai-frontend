@@ -5,7 +5,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls, GizmoHelper, GizmoViewport } from '@react-three/drei'
 import * as THREE from 'three'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
-import { X, Save, Download, RotateCcw, ZoomIn, ZoomOut, Box, Grid3x3, Play, Square, Pencil } from 'lucide-react'
+import { X, Save, Download, RotateCcw, ZoomIn, ZoomOut, Box, Grid3x3, Play, Square } from 'lucide-react'
 
 export type ModelType = 'spur_gear' | 'helical_gear' | 'shaft' | 'bearing' | 'bolt' | 'cube' | 'rectangle' | 'sphere' | 'cylinder' | 'pharma_table' | 'pharma_chair' | 'empty'
 
@@ -931,7 +931,6 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
           <ToolBtn icon={<Box size={12} />}       label="Wireframe"   active={wireframe}   onClick={() => setWireframe(w => !w)} />
           <ToolBtn icon={<span style={{ fontSize: '10px' }}>🌡</span>} label="Stress heatmap" active={false} onClick={handleHeatmapClick} />
           <ToolBtn icon={<Grid3x3 size={12} />}   label="Toggle grid" active={gridVisible} onClick={() => setGrid(g => !g)} />
-          <ToolBtn icon={<Pencil size={12} />}    label="2D Drawing"  active={show2D}      onClick={() => setShow2D(s => !s)} />
         </div>
 
         <button onClick={onClose}
