@@ -183,7 +183,7 @@ export function useSmartSuggestions(): { cards: PromptCard[]; isPersonalised: bo
         picked.push(...defaults.slice(0, 4 - picked.length))
       }
 
-      setCards(picked.slice(0, 4).map(({ keywords: _k, score: _s, ...card }) => card) as PromptCard[])
+      setCards(picked.slice(0, 4).map(({ title, description, model, tag }) => ({ title, description, model, tag })))
       setIsPersonalised(true)
     } catch {}
   }, [])
