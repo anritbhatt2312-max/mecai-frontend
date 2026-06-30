@@ -64,7 +64,12 @@ function DownloadButtons({ urls, darkMode }: { urls: CadUrls; darkMode: boolean 
 const EMPTY_CHATS: { id: string; title: string; time: string }[] = []
 
 function splitLines(text: string): string[] {
-  return text.split(/(?<=\.)\s+/).filter(l => l.trim().length > 0)
+  // Split on blank-line boundaries so each chunk is a complete markdown block
+  // (a full paragraph, a full heading, a full list) rather than a sentence fragment.
+  return text
+    .split(/\n\s*\n/)
+    .map(block => block.trim())
+    .filter(block => block.length > 0)
 }
 
 function detectStatusWord(prompt: string): string {
@@ -233,7 +238,7 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [statusWord, setStatusWord] = useState('Thinking')
-  const [viewerOpen, setViewerOpen] = useState(false)
+  const [viewerOpen, setViewerOpen] = useState(true)
   const [viewerWidth, setViewerWidth] = useState(
     typeof window !== 'undefined' ? Math.floor(window.innerWidth * 0.45) : 480
   )
@@ -248,6 +253,7 @@ export default function ChatPage() {
   const [activeModel, setActiveModel] = useState<ModelType>('empty')
   const [pendingModel, setPendingModel] = useState<ModelType>('empty')
   const [shapeDims, setShapeDims] = useState<ShapeDimensions>({})
+  const [currentCadUrls, setCurrentCadUrls] = useState<CadUrls | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [chatKey, setChatKey] = useState(0)
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null)
@@ -441,6 +447,10 @@ export default function ChatPage() {
         dxf_url:  data.dxf_url  ?? null,
       }
 
+      if (data.has_stl) {
+        setCurrentCadUrls(cadUrls)
+      }
+
       // If backend generated a CAD file, open the 3D viewer
       if (data.has_stl) {
         setViewerOpen(true)
@@ -583,15 +593,25 @@ export default function ChatPage() {
         @keyframes shimmer { 0%,100%{background-position:0% 50%} 50%{background-position:100% 50%} }
         * { font-family: ${F}; }
         ::placeholder { color: ${dm ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.32)'}; font-weight: 300; }
-        .mecai-markdown p { margin: 0 0 4px 0; }
+        .mecai-markdown p { margin: 0 0 14px 0; }
         .mecai-markdown p:last-child { margin-bottom: 0; }
         .mecai-markdown strong { font-weight: 600; }
         .mecai-markdown em { font-style: italic; }
-        .mecai-markdown ul, .mecai-markdown ol { margin: 4px 0; padding-left: 20px; }
-        .mecai-markdown li { margin-bottom: 2px; }
-        .mecai-markdown h1, .mecai-markdown h2, .mecai-markdown h3 { font-weight: 600; margin: 8px 0 4px 0; font-size: 1em; text-transform: none; }
+        .mecai-markdown ul, .mecai-markdown ol { margin: 4px 0 14px 0; padding-left: 22px; }
+        .mecai-markdown ul:last-child, .mecai-markdown ol:last-child { margin-bottom: 0; }
+        .mecai-markdown li { margin-bottom: 6px; line-height: 1.7; }
+        .mecai-markdown li:last-child { margin-bottom: 0; }
+        .mecai-markdown ol { list-style-type: decimal; }
+        .mecai-markdown ul { list-style-type: disc; }
+        .mecai-markdown h1 { font-weight: 600; font-size: 1.35em; margin: 18px 0 8px 0; text-transform: none; letter-spacing: -0.01em; }
+        .mecai-markdown h1:first-child { margin-top: 0; }
+        .mecai-markdown h2 { font-weight: 600; font-size: 1.18em; margin: 16px 0 8px 0; text-transform: none; letter-spacing: -0.01em; }
+        .mecai-markdown h2:first-child { margin-top: 0; }
+        .mecai-markdown h3 { font-weight: 600; font-size: 1.05em; margin: 14px 0 6px 0; text-transform: none; }
+        .mecai-markdown h3:first-child { margin-top: 0; }
         .mecai-markdown code { background: ${dm ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}; padding: 1px 5px; border-radius: 4px; font-size: 0.9em; }
         .mecai-markdown a { color: #1739E5; text-decoration: underline; }
+        .mecai-markdown blockquote { border-left: 2px solid ${dm ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)'}; padding-left: 14px; margin: 8px 0 14px 0; color: ${textMuted}; }
       `}</style>
 
       <Sidebar
@@ -649,6 +669,7 @@ export default function ChatPage() {
             pendingModel={pendingModel}
             isGenerating={isGenerating}
             shapeDims={shapeDims}
+            cadUrls={currentCadUrls}
           />
         </div>
       </div>

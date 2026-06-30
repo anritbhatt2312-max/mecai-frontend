@@ -327,6 +327,12 @@ const MODEL_META: Record<ModelType, { label: string; material: string; specs: { 
   empty:        { label: '', material: '', specs: [] },
 }
 
+export interface CadUrls {
+  stl_url: string | null
+  step_url: string | null
+  dxf_url: string | null
+}
+
 export interface ModelViewerProps {
   onClose: () => void
   darkMode?: boolean
@@ -336,6 +342,7 @@ export interface ModelViewerProps {
   pendingModel?: ModelType
   isGenerating?: boolean
   shapeDims?: ShapeDimensions
+  cadUrls?: CadUrls | null
 }
 
 const DIM_COLOR  = '#1a1a1a'
@@ -786,7 +793,7 @@ function ToolBtn({ icon, label, active, onClick }: { icon: React.ReactNode; labe
   )
 }
 
-export default function ModelViewer({ onClose, modelType = 'empty', pendingModel = 'empty', isGenerating = false, shapeDims = {}, heatmap: heatmapProp, onHeatmapToggle }: ModelViewerProps) {
+export default function ModelViewer({ onClose, modelType = 'empty', pendingModel = 'empty', isGenerating = false, shapeDims = {}, heatmap: heatmapProp, onHeatmapToggle, cadUrls = null }: ModelViewerProps) {
   const [wireframe, setWireframe]     = useState(false)
   const [heatmap, setHeatmap]         = useState(false)
   useEffect(() => { if (heatmapProp !== undefined) setHeatmap(heatmapProp) }, [heatmapProp])
@@ -863,7 +870,22 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
     a.click()
   }, [modelType])
 
+  const downloadFile = useCallback((url: string, filename: string) => {
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.target = '_blank'
+    a.rel = 'noopener noreferrer'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+  }, [])
+
   const handleExportSTL = useCallback(() => {
+    if (cadUrls?.stl_url) {
+      downloadFile(cadUrls.stl_url, `${MODEL_META[modelType]?.label?.replace(/ /g, '_') ?? 'model'}.stl`)
+      return
+    }
     if (!sceneRef.current) return
     const exporter = new STLExporter()
     const stl = exporter.parse(sceneRef.current, { binary: false })
@@ -874,15 +896,23 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
     a.download = `${MODEL_META[modelType]?.label?.replace(/ /g, '_') ?? 'model'}.stl`
     a.click()
     URL.revokeObjectURL(url)
-  }, [modelType])
+  }, [modelType, cadUrls, downloadFile])
 
   const handleExportSTEP = useCallback(() => {
-    showToast('STEP export — coming soon')
-  }, [showToast])
+    if (cadUrls?.step_url) {
+      downloadFile(cadUrls.step_url, `${MODEL_META[modelType]?.label?.replace(/ /g, '_') ?? 'model'}.step`)
+    } else {
+      showToast('STEP export — coming soon')
+    }
+  }, [cadUrls, modelType, downloadFile, showToast])
 
   const handleExportDXF = useCallback(() => {
-    showToast('DXF export — coming soon')
-  }, [showToast])
+    if (cadUrls?.dxf_url) {
+      downloadFile(cadUrls.dxf_url, `${MODEL_META[modelType]?.label?.replace(/ /g, '_') ?? 'model'}.dxf`)
+    } else {
+      showToast('DXF export — coming soon')
+    }
+  }, [cadUrls, modelType, downloadFile, showToast])
 
   const handleHeatmapClick = useCallback(() => {
     showToast('Stress heatmap — available when compute backend is connected')
@@ -923,8 +953,8 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
           <ToolBtn icon={<Save size={12} />}     label="Save spec (JSON)" onClick={handleSave} />
           <ToolBtn icon={<Download size={12} />} label="Export PNG"       onClick={handleExport} />
           <ToolBtn icon={<span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '-0.01em', lineHeight: 1 }}>STL</span>} label="Export STL"            onClick={handleExportSTL} />
-          <ToolBtn icon={<span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '-0.01em', lineHeight: 1 }}>STP</span>} label="Export STEP — coming soon" onClick={handleExportSTEP} />
-          <ToolBtn icon={<span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '-0.01em', lineHeight: 1 }}>DXF</span>} label="Export DXF — coming soon" onClick={handleExportDXF} />
+          <ToolBtn icon={<span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '-0.01em', lineHeight: 1 }}>STP</span>} label={cadUrls?.step_url ? 'Export STEP' : 'Export STEP — coming soon'} onClick={handleExportSTEP} />
+          <ToolBtn icon={<span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '-0.01em', lineHeight: 1 }}>DXF</span>} label={cadUrls?.dxf_url ? 'Export DXF' : 'Export DXF — coming soon'} onClick={handleExportDXF} />
           <ToolBtn icon={<RotateCcw size={12} />} label="Reset view"  onClick={handleReset} />
           <ToolBtn icon={<ZoomIn size={12} />}    label="Zoom in"     onClick={() => setZoomDelta(1.5)} />
           <ToolBtn icon={<ZoomOut size={12} />}   label="Zoom out"    onClick={() => setZoomDelta(-1.5)} />
