@@ -6,6 +6,8 @@ import { OrbitControls, GizmoHelper, GizmoViewport } from '@react-three/drei'
 import * as THREE from 'three'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
 import { X, Save, Download, RotateCcw, ZoomIn, ZoomOut, Box, Grid3x3, Play, Square, Pencil } from 'lucide-react'
+import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
+import { useLoader } from '@react-three/fiber'
 
 export type ModelType = 'spur_gear' | 'helical_gear' | 'shaft' | 'bearing' | 'bolt' | 'cube' | 'rectangle' | 'sphere' | 'cylinder' | 'pharma_table' | 'pharma_chair' | 'empty'
 
@@ -26,6 +28,35 @@ function matProps(material: string) {
     case 'cast_iron':   return { color: '#626870', metalness: 0.50, roughness: 0.62 }
     default:            return { color: '#b4c4d0', metalness: 0.73, roughness: 0.30 }
   }
+}
+
+function RealSTLModel({ url, ar, wireframe }: { url: string; ar: boolean; wireframe: boolean }) {
+  const geometry = useLoader(STLLoader, url)
+  const ref = useRef<THREE.Mesh>(null)
+
+  useFrame((_, d) => { if (ref.current && ar) ref.current.rotation.y += d * 0.5 })
+
+  const mat = useMemo(() => new THREE.MeshStandardMaterial({ ...matProps('steel') }), [])
+  useEffect(() => { mat.wireframe = wireframe; mat.needsUpdate = true }, [mat, wireframe])
+
+  const centeredGeometry = useMemo(() => {
+    const geo = geometry.clone()
+    geo.computeBoundingBox()
+    const box = geo.boundingBox!
+    const center = new THREE.Vector3()
+    box.getCenter(center)
+    geo.translate(-center.x, -center.y, -center.z)
+
+    const size = new THREE.Vector3()
+    box.getSize(size)
+    const maxDim = Math.max(size.x, size.y, size.z)
+    const scale = maxDim > 0 ? 3.0 / maxDim : 1
+    geo.scale(scale, scale, scale)
+
+    return geo
+  }, [geometry])
+
+  return <mesh ref={ref} geometry={centeredGeometry} material={mat} />
 }
 
 function InfiniteGrid({ visible }: { visible: boolean }) {
@@ -336,6 +367,8 @@ export interface ModelViewerProps {
   pendingModel?: ModelType
   isGenerating?: boolean
   shapeDims?: ShapeDimensions
+  stlUrl?: string | null
+  realSpecs?: { type: string; dimensions: string; material: string } | null
 }
 
 const DIM_COLOR  = '#1a1a1a'
@@ -786,7 +819,7 @@ function ToolBtn({ icon, label, active, onClick }: { icon: React.ReactNode; labe
   )
 }
 
-export default function ModelViewer({ onClose, modelType = 'empty', pendingModel = 'empty', isGenerating = false, shapeDims = {}, heatmap: heatmapProp, onHeatmapToggle }: ModelViewerProps) {
+export default function ModelViewer({ onClose, modelType = 'empty', pendingModel = 'empty', isGenerating = false, shapeDims = {}, heatmap: heatmapProp, onHeatmapToggle, stlUrl = null, realSpecs = null }: ModelViewerProps) {
   const [wireframe, setWireframe]     = useState(false)
   const [heatmap, setHeatmap]         = useState(false)
   useEffect(() => { if (heatmapProp !== undefined) setHeatmap(heatmapProp) }, [heatmapProp])
@@ -1000,18 +1033,23 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
               <pointLight       position={[0, 5, 4]}    intensity={1.6} color="#ffffff" />
               <pointLight       position={[-4, 2, 2]}   intensity={0.9} color="#c8dcff" />
               <InfiniteGrid visible={gridVisible} />
-              {modelType === 'spur_gear'    && <SpurGearModel    ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
-              {modelType === 'helical_gear' && <HelicalGearModel ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
-              {modelType === 'shaft'        && <ShaftModel       ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
-              {modelType === 'bearing'      && <BearingModel     ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
-              {modelType === 'bolt'         && <BoltModel        ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
-              {modelType === 'cube'         && <CubeModel        dims={shapeDims} ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
-              {modelType === 'rectangle'    && <RectangleModel   dims={shapeDims} ar={autoRotate} wireframe={wireframe} />}
-              {modelType === 'sphere'       && <SphereModel      dims={shapeDims} ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
-              {modelType === 'cylinder'     && <CylinderModel    dims={shapeDims} ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
-              {modelType === 'pharma_table' && <PharmaTableModel dims={shapeDims} ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
-              {modelType === 'pharma_chair' && <PharmaChairModel ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
-    
+              {stlUrl ? (
+  <RealSTLModel url={stlUrl} ar={autoRotate} wireframe={wireframe} />
+) : 
+  <>
+    {modelType === 'spur_gear'    && <SpurGearModel    ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
+    {modelType === 'helical_gear' && <HelicalGearModel ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
+    {modelType === 'shaft'        && <ShaftModel       ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
+    {modelType === 'bearing'      && <BearingModel     ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
+    {modelType === 'bolt'         && <BoltModel        ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
+    {modelType === 'cube'         && <CubeModel        dims={shapeDims} ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
+    {modelType === 'rectangle'    && <RectangleModel   dims={shapeDims} ar={autoRotate} wireframe={wireframe} heatmap={false} />}
+    {modelType === 'sphere'       && <SphereModel      dims={shapeDims} ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
+    {modelType === 'cylinder'     && <CylinderModel    dims={shapeDims} ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
+    {modelType === 'pharma_table' && <PharmaTableModel dims={shapeDims} ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
+    {modelType === 'pharma_chair' && <PharmaChairModel ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
+  </>
+}
           {zoomDelta !== 0 && <CameraZoom delta={zoomDelta} onDone={() => setZoomDelta(0)} />}
               <OrbitControls
                 ref={controlsRef}
@@ -1040,7 +1078,28 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
           </div>
         )}
 
-        {displaySpecs.length > 0 && !isGenerating && (
+        {stlUrl && realSpecs && !isGenerating && (
+          <div style={{ position: 'absolute', bottom: '48px', left: '12px', backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: '8px', padding: '8px 12px', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.05)' }}>
+            {realSpecs.material && (
+              <div style={{ marginBottom: '6px', paddingBottom: '5px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                <span style={{ fontSize: '9px', color: '#63b3ed', fontFamily: F, fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{realSpecs.material}</span>
+              </div>
+            )}
+            {realSpecs.type && (
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '2px' }}>
+                <span style={{ fontSize: '10px', color: '#374151', fontFamily: F, width: '76px' }}>Type</span>
+                <span style={{ fontSize: '10px', color: '#94a3b8', fontFamily: F, fontWeight: 500 }}>{realSpecs.type}</span>
+              </div>
+            )}
+            {realSpecs.dimensions && (
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '2px' }}>
+                <span style={{ fontSize: '10px', color: '#374151', fontFamily: F, width: '76px' }}>Dimensions</span>
+                <span style={{ fontSize: '10px', color: '#94a3b8', fontFamily: F, fontWeight: 500 }}>{realSpecs.dimensions}</span>
+              </div>
+            )}
+          </div>
+        )}
+        {displaySpecs.length > 0 && !isGenerating && !stlUrl && (
           <div style={{ position: 'absolute', bottom: '48px', left: '12px', backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: '8px', padding: '8px 12px', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.05)' }}>
             {meta.material && (
               <div style={{ marginBottom: '6px', paddingBottom: '5px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>

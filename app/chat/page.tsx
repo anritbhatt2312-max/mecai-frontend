@@ -232,6 +232,8 @@ export default function ChatPage() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeModel, setActiveModel] = useState<ModelType>('empty')
+  const [currentStlUrl, setCurrentStlUrl] = useState<string | null>(null)
+  const [realSpecs, setRealSpecs] = useState<{ type: string; dimensions: string; material: string } | null>(null)
   const [pendingModel, setPendingModel] = useState<ModelType>('empty')
   const [shapeDims, setShapeDims] = useState<ShapeDimensions>({})
   const [isGenerating, setIsGenerating] = useState(false)
@@ -415,7 +417,7 @@ export default function ChatPage() {
         })
       }
 
-      const lines = splitLines(data.text ?? 'No response received.')
+      const lines = splitLines(data.response ?? 'No response received.')
 
       const cadUrls: CadUrls = {
         stl_url:  data.stl_url  ?? null,
@@ -428,10 +430,19 @@ export default function ChatPage() {
         setViewerOpen(true)
         setIsGenerating(true)
         setActiveModel('empty')
+        setCurrentStlUrl(data.stl_url ?? null)
+        const specMatch = data.response.match(/type:\s*(.+)/i)
+        const dimsMatch = data.response.match(/dimensions:\s*(.+)/i)
+        const materialMatch = data.response.match(/material:\s*(.+)/i)
+        setRealSpecs({
+          type: specMatch ? specMatch[1].trim() : '',
+          dimensions: dimsMatch ? dimsMatch[1].trim() : '',
+          material: materialMatch ? materialMatch[1].trim() : '',
+        })
         setTimeout(() => {
           setIsGenerating(false)
           // Infer a local ModelType from response text for the 3D preview
-          const tl = (data.text ?? '').toLowerCase()
+          const tl = (data.response ?? '').toLowerCase()
           let inferred: ModelType = 'cube'
           if (tl.includes('spur gear'))                           inferred = 'spur_gear'
           else if (tl.includes('helical'))                        inferred = 'helical_gear'
@@ -613,6 +624,8 @@ export default function ChatPage() {
             pendingModel={pendingModel}
             isGenerating={isGenerating}
             shapeDims={shapeDims}
+            stlUrl={currentStlUrl}
+            realSpecs={realSpecs}
           />
         </div>
       </div>
