@@ -618,6 +618,8 @@ export default function ChatPage() {
         darkMode={dm}
         onThemeChange={handleThemeChange}
         themePreference={themePreference}
+        conversations={conversations.length > 0 ? conversations : EMPTY_CHATS}
+        onSelectChat={loadConversation}
       />
 
       <SearchPanel

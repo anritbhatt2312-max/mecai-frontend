@@ -4,14 +4,6 @@ import { useState, useEffect } from 'react'
 import { useSession, signOut } from 'next-auth/react'
 import { Plus, Search, FolderOpen, Settings, HelpCircle, Keyboard, Monitor, ChevronDown, ChevronUp, Check } from 'lucide-react'
 
-const RECENT_CHATS = [
-  { id: '1', title: 'Helical gear 48T design', time: '2m ago' },
-  { id: '2', title: 'Bicycle frame stress calc', time: '1h ago' },
-  { id: '3', title: 'F1 suspension geometry', time: '3h ago' },
-  { id: '4', title: 'Gearbox torque analysis', time: 'Yesterday' },
-  { id: '5', title: 'Steel shaft torsion', time: 'Yesterday' },
-]
-
 export const SIDEBAR_EXPANDED = 284
 export const SIDEBAR_COLLAPSED = 58
 const ICON_AREA = 58
@@ -26,6 +18,12 @@ export interface SidebarSettings {
   notifications: boolean
 }
 
+interface ConversationSummary {
+  id: string
+  title: string
+  time: string
+}
+
 interface Props {
   open: boolean
   onToggle: () => void
@@ -34,6 +32,8 @@ interface Props {
   darkMode: boolean
   onThemeChange: (theme: ThemePreference) => void
   themePreference: ThemePreference
+  conversations: ConversationSummary[]
+  onSelectChat: (id: string) => void
 }
 
 // ── Modal wrapper ──────────────────────────────────────────────────────────
@@ -313,7 +313,7 @@ function Avatar({ name, size = 30 }: { name: string; size?: number }) {
   )
 }
 
-export default function Sidebar({ open, onToggle, onNavigate, onSearchOpen, darkMode, onThemeChange, themePreference }: Props) {
+export default function Sidebar({ open, onToggle, onNavigate, onSearchOpen, darkMode, onThemeChange, themePreference, conversations, onSelectChat }: Props) {
   const { data: session } = useSession()
 
   const userName  = session?.user?.name  ?? 'User'
@@ -322,7 +322,7 @@ export default function Sidebar({ open, onToggle, onNavigate, onSearchOpen, dark
   const lastName  = userName.split(' ').slice(1).join(' ')
   const shortName = lastName ? `${firstName} ${lastName[0]}.` : firstName
 
-  const [activeChat, setActiveChat]       = useState('1')
+  const [activeChat, setActiveChat]       = useState('')
   const [showSettings, setShowSettings]   = useState(false)
   const [showHelp, setShowHelp]           = useState(false)
   const [showProfile, setShowProfile]     = useState(false)
@@ -330,6 +330,11 @@ export default function Sidebar({ open, onToggle, onNavigate, onSearchOpen, dark
   const [mounted, setMounted]             = useState(false)
 
   useEffect(() => setMounted(true), [])
+
+  function handleSelectChat(id: string) {
+    setActiveChat(id)
+    onSelectChat(id)
+  }
 
   return (
     <>
@@ -426,13 +431,13 @@ export default function Sidebar({ open, onToggle, onNavigate, onSearchOpen, dark
           <SidebarRow open={open} icon={<Search size={18} />}     label="Search chats..."onClick={onSearchOpen}               iconAreaWidth={ICON_AREA} />
           <SidebarRow open={open} icon={<FolderOpen size={18} />} label="Projects"       onClick={() => onNavigate('projects')}iconAreaWidth={ICON_AREA} />
 
-          {open && (
+          {open && conversations.length > 0 && (
             <>
               <div style={{ padding: '14px 18px 4px 18px' }}>
                 <span style={{ fontSize: '9px', fontWeight: 500, color: 'rgba(255,255,255,0.2)', letterSpacing: '0.16em', textTransform: 'uppercase', fontFamily: F }}>Recent</span>
               </div>
-              {RECENT_CHATS.map(chat => (
-                <button key={chat.id} onClick={() => setActiveChat(chat.id)}
+              {conversations.map(chat => (
+                <button key={chat.id} onClick={() => handleSelectChat(chat.id)}
                   style={{ width: 'calc(100% - 16px)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 10px 9px 16px', borderRadius: '8px', border: 'none', textAlign: 'left', backgroundColor: activeChat === chat.id ? 'rgba(255,255,255,0.12)' : 'transparent', cursor: 'pointer', transition: 'background-color 0.15s', margin: '2px 8px', boxSizing: 'border-box' }}
                   onMouseEnter={e => { if (activeChat !== chat.id) e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.07)' }}
                   onMouseLeave={e => { if (activeChat !== chat.id) e.currentTarget.style.backgroundColor = 'transparent' }}>
