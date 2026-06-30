@@ -6,7 +6,7 @@ import { useSession } from 'next-auth/react'
 import LoginTransition from '@/components/LoginTransition'
 import ProjectsPage from '@/components/ProjectsPage'
 import { useSmartSuggestions, trackMessage } from '@/hooks/useSmartSuggestions'
-import { ArrowUp, Paperclip, X, Search, StopCircle, Download } from 'lucide-react'
+import { ArrowUp, X, Search, StopCircle, Download } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import ModelViewer, { ModelType, ShapeDimensions } from '@/components/viewer/ModelViewer'
 import Sidebar, { SIDEBAR_EXPANDED, SIDEBAR_COLLAPSED, ThemePreference } from '@/components/sidebar/Sidebar'
@@ -139,7 +139,7 @@ interface InputBarProps {
   textPrimary: string
   textMuted: string
   darkMode: boolean
-  textareaRef: React.RefObject<HTMLTextAreaElement| null>
+  textareaRef: React.RefObject<HTMLTextAreaElement>
 }
 
 function InputBar({ input, onChange, onKeyDown, onSend, onStop, isStreaming, placeholder, disclaimer, textPrimary, textMuted, darkMode, textareaRef }: InputBarProps) {
@@ -151,10 +151,6 @@ function InputBar({ input, onChange, onKeyDown, onSend, onStop, isStreaming, pla
         border: `1px solid ${darkMode ? '#2e3847' : '#e0e0e0'}`,
         borderRadius: '12px', padding: '10px 12px 10px 14px',
       }}>
-        <label style={{ color: darkMode ? textMuted : '#aaa', cursor: 'pointer', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-          <Paperclip size={15} />
-          <input type="file" style={{ display: 'none' }} />
-        </label>
         <textarea
           ref={textareaRef} value={input}
           onChange={e => { onChange(e.target.value); const el = e.target; el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 120) + 'px' }}
@@ -186,7 +182,7 @@ function InputBar({ input, onChange, onKeyDown, onSend, onStop, isStreaming, pla
 interface SearchPanelProps {
   open: boolean; query: string; onChange: (v: string) => void; onClose: () => void
   chats: { id: string; title: string; time: string }[]; surface: string; border: string; textPrimary: string
-  textMuted: string; darkMode: boolean; inputRef: React.RefObject<HTMLInputElement | null>
+  textMuted: string; darkMode: boolean; inputRef: React.RefObject<HTMLInputElement>
   sidebarWidth: number; viewerWidth: number; viewerOpen: boolean
   onSelectChat: (id: string) => void
 }
@@ -429,11 +425,8 @@ export default function ChatPage() {
           return [{ id: data.conversation_id, title: trimmed.slice(0, 50), time: 'Just now' }, ...prev]
         })
       }
-      const cleanedResponse = (data.response ?? '')
-  .replace(/COMPONENT_REQUEST[\s\S]*?END_COMPONENT_REQUEST/g, '')
-  .replace(/ASSEMBLY_REQUEST[\s\S]*?END_ASSEMBLY_REQUEST/g, '')
-  .trim()
-      const lines = splitLines(cleanedResponse || 'No response received.')
+
+      const lines = splitLines(data.response ?? 'No response received.')
 
       const cadUrls: CadUrls = {
         stl_url:  data.stl_url  ?? null,

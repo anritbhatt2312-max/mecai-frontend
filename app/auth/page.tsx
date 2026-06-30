@@ -116,7 +116,6 @@ function AuthContent() {
         .panel { animation: fadeUp 0.4s cubic-bezier(.22,.68,0,1.2) both; }
       `}</style>
 
-      {/* Background — exact match to landing page */}
       <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', background: '#02195C' }} />
       <div style={{ position: 'fixed', top: -100, left: '50%', transform: 'translateX(-50%)', width: 900, height: 600, zIndex: 0, pointerEvents: 'none', background: 'radial-gradient(ellipse at 50% 30%, rgba(23,57,229,0.5) 0%, transparent 65%)' }} />
       <div style={{ position: 'fixed', bottom: -200, left: '50%', transform: 'translateX(-50%)', width: 600, height: 400, zIndex: 0, pointerEvents: 'none', background: 'radial-gradient(ellipse, rgba(2,25,92,0.8) 0%, transparent 70%)' }} />
@@ -154,7 +153,6 @@ function AuthContent() {
           backdropFilter: 'blur(12px)',
         }}>
 
-          {/* Back */}
           <button onClick={() => router.push('/')} style={{
             display: 'inline-flex', alignItems: 'center', gap: 6,
             fontSize: 12, color: 'rgba(255,255,255,0.35)', background: 'none',
@@ -169,7 +167,6 @@ function AuthContent() {
             Back to home
           </button>
 
-          {/* Logo */}
           <div style={{ textAlign: 'center', marginBottom: 4, fontFamily: F, fontSize: 32, lineHeight: 1, letterSpacing: '-0.04em' }}>
             <span style={{ fontWeight: 300, color: '#ffffff' }}>Mec</span>
             <span style={{ fontWeight: 300, background: 'linear-gradient(135deg, #5b7fff, #CCDEFF, #5b7fff)', backgroundSize: '200% 200%', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', animation: 'shimmer 4s ease infinite' }}>AI</span>
@@ -178,7 +175,6 @@ function AuthContent() {
             {isSignup ? 'Create your account' : 'Welcome back'}
           </p>
 
-          {/* Tabs */}
           <div style={{
             display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4,
             background: 'rgba(255,255,255,0.06)', borderRadius: 8, padding: 4, marginBottom: 24,
@@ -195,7 +191,6 @@ function AuthContent() {
             ))}
           </div>
 
-          {/* Social */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
             {[
               { label: 'Google', icon: <GoogleIcon />, bg: '#fff', color: '#1f2937', key: 'google' as const },
@@ -211,20 +206,18 @@ function AuthContent() {
             ))}
           </div>
 
-          {/* Divider */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, color: 'rgba(255,255,255,0.28)', fontSize: 12, fontFamily: F }}>
             <span style={{ flex: 1, height: '0.5px', background: 'rgba(255,255,255,0.12)' }} />
             or continue with email
             <span style={{ flex: 1, height: '0.5px', background: 'rgba(255,255,255,0.12)' }} />
           </div>
 
-          {/* Form */}
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {isSignup && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <label style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.50)', fontFamily: F }}>Full name</label>
                 <input type="text" value={name} onChange={e => setName(e.target.value)}
-                  placeholder="Anrit Bhatt" autoComplete="name"
+                  placeholder="Your full name" autoComplete="name"
                   style={{ ...inputBase, border: `0.5px solid ${errors.name ? 'rgba(248,113,113,0.7)' : 'rgba(255,255,255,0.15)'}` }} />
                 {errors.name && <span style={{ fontSize: 11, color: '#f87171', fontFamily: F }}>{errors.name}</span>}
               </div>
