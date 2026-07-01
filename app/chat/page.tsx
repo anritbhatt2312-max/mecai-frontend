@@ -541,7 +541,7 @@ export default function ChatPage() {
     input, onChange: setInput, onKeyDown: handleKeyDown,
     onSend: () => sendMessage(input), onStop: stopStreaming,
     isStreaming, surface, border, textPrimary, textMuted,
-    darkMode: dm, textareaRef, placeholder: '',
+    darkMode: dm, textareaRef: textareaRef as React.RefObject<HTMLTextAreaElement>, placeholder: '',
     disclaimer: t('disclaimer'),
   }
 
