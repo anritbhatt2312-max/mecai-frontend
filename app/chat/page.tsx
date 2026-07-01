@@ -229,7 +229,7 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [statusWord, setStatusWord] = useState('Thinking')
-  const [viewerOpen, setViewerOpen] = useState(true)
+  const [viewerOpen, setViewerOpen] = useState(false)
   const [viewerWidth, setViewerWidth] = useState(
     typeof window !== 'undefined' ? Math.floor(window.innerWidth * 0.45) : 480
   )
