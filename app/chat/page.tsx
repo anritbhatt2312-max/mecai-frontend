@@ -426,7 +426,11 @@ export default function ChatPage() {
         })
       }
 
-      const lines = splitLines(data.response ?? 'No response received.')
+      const cleanedResponse = (data.response ?? '')
+  .replace(/COMPONENT_REQUEST[\s\S]*?END_COMPONENT_REQUEST/g, '')
+  .replace(/ASSEMBLY_REQUEST[\s\S]*?END_ASSEMBLY_REQUEST/g, '')
+  .trim()
+const lines = splitLines(cleanedResponse || 'No response received.')
 
       const cadUrls: CadUrls = {
         stl_url:  data.stl_url  ?? null,
