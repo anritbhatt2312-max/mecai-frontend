@@ -10,6 +10,20 @@ const handler = NextAuth({
       checks: ['state'],
     }),
   ],
+  session: {
+    strategy: 'jwt',
+  },
+  cookies: {
+    state: {
+      name: '__Secure-next-auth.state',
+      options: {
+        httpOnly: true,
+        sameSite: 'none',
+        path: '/',
+        secure: true,
+      },
+    },
+  },
   callbacks: {
     async jwt({ token, account, profile }) {
       if (account && profile) {
