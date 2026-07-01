@@ -10,12 +10,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, account }) {
+    async jwt({ token, account, profile }) {
+      if (account && profile) {
+        token.googleId = profile.sub
+      }
       return token
     },
     async session({ session, token }) {
-      if (session.user && token.sub) {
-        session.user.id = token.sub
+      if (session.user) {
+        session.user.id = (token.googleId as string) ?? token.sub ?? ''
       }
       return session
     },
