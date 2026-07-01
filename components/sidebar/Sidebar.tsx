@@ -429,7 +429,6 @@ export default function Sidebar({ open, onToggle, onNavigate, onSearchOpen, dark
         <div style={{ flex: 1, overflowY: open ? 'auto' : 'hidden', overflowX: 'hidden' }}>
           <SidebarRow open={open} icon={<Plus size={18} />}       label="New chat"       onClick={() => onNavigate('home')}    iconAreaWidth={ICON_AREA} />
           <SidebarRow open={open} icon={<Search size={18} />}     label="Search chats..."onClick={onSearchOpen}               iconAreaWidth={ICON_AREA} />
-          <SidebarRow open={open} icon={<FolderOpen size={18} />} label="Projects"       onClick={() => onNavigate('projects')}iconAreaWidth={ICON_AREA} />
 
           {open && conversations.length > 0 && (
             <>

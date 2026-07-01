@@ -4,7 +4,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import LoginTransition from '@/components/LoginTransition'
-import ProjectsPage from '@/components/ProjectsPage'
 import { useSmartSuggestions, trackMessage } from '@/hooks/useSmartSuggestions'
 import { ArrowUp, X, Search, StopCircle, Download } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
@@ -785,9 +784,6 @@ const lines = splitLines(cleanedResponse || 'No response received.')
           </div>
         )}
 
-        {page === 'projects' && (
-          <ProjectsPage darkMode={dm} textPrimary={textPrimary} textMuted={textMuted} border={border} bg={bg} />
-        )}
       </main>
     </>
   )
