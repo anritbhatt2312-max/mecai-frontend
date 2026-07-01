@@ -310,6 +310,7 @@ export default function ChatPage() {
 
   useEffect(() => {
   if (!session?.user?.id) return
+    fetch("https://web-production-9f493.up.railway.app/auth/upsert-user", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ user_id: session.user.id, email: session.user.email ?? "", name: session.user.name ?? "" }) }).catch(() => {})
   fetch(`${CONVERSATIONS_API}/${session.user.id}`)
       .then(r => r.ok ? r.json() : [])
       .then((res: { conversations: Conversation[] } | Conversation[]) => {
