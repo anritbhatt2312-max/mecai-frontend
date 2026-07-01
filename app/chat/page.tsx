@@ -63,12 +63,9 @@ function DownloadButtons({ urls, darkMode }: { urls: CadUrls; darkMode: boolean 
 const EMPTY_CHATS: { id: string; title: string; time: string }[] = []
 
 function splitLines(text: string): string[] {
-  return text
-    .split(/\n\s*\n/)
-    .map(block => block.trim())
-    .filter(block => block.length > 0)
+  return [text]
 }
-
+  
 function detectStatusWord(prompt: string): string {
   const p = prompt.toLowerCase()
   const calcKeywords = ['calculate', 'stress', 'force', 'torque', 'load', 'pressure', 'strain', 'deflection', 'formula', 'equation', 'rpm', 'velocity', 'acceleration', 'fos', 'factor of safety', 'fea', 'fatigue']
