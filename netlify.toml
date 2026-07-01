@@ -1,0 +1,5 @@
+[[headers]]
+  for = "/api/auth/*"
+  [headers.values]
+    Cache-Control = "no-store, no-cache, must-revalidate"
+    Pragma = "no-cache"
