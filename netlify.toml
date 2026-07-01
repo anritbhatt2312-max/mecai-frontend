@@ -3,3 +3,12 @@
   [headers.values]
     Cache-Control = "no-store, no-cache, must-revalidate"
     Pragma = "no-cache"
+
+[functions]
+  node_bundler = "esbuild"
+
+[[redirects]]
+  from = "/api/auth/*"
+  to = "/api/auth/:splat"
+  status = 200
+  force = true
