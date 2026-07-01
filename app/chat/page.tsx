@@ -624,7 +624,7 @@ export default function ChatPage() {
         chats={conversations.length > 0 ? conversations : EMPTY_CHATS}
         surface={surface} border={border}
         textPrimary={textPrimary} textMuted={textMuted} darkMode={dm}
-        inputRef={searchInputRef} sidebarWidth={sidebarWidth}
+        inputRef={searchInputRef as React.RefObject<HTMLInputElement>} sidebarWidth={sidebarWidth}
         viewerWidth={viewerWidth} viewerOpen={viewerOpen}
         onSelectChat={loadConversation}
       />
