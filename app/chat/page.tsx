@@ -310,7 +310,6 @@ export default function ChatPage() {
   }, [])
 
   useEffect(() => {
-  console.log('session.user on production:', session?.user)
   if (!session?.user?.id) return
   fetch(`${CONVERSATIONS_API}/${session.user.id}`)
       .then(r => r.ok ? r.json() : [])
