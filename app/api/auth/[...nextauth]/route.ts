@@ -2,6 +2,7 @@ import NextAuth from 'next-auth'
 import GoogleProvider from 'next-auth/providers/google'
 
 const handler = NextAuth({
+  secret: process.env.NEXTAUTH_SECRET,
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -10,14 +11,12 @@ const handler = NextAuth({
   ],
   callbacks: {
     async jwt({ token, account, profile }) {
-      // On first sign-in, Google's sub is the stable unique user ID
       if (account && profile) {
         token.id = token.sub
       }
       return token
     },
     async session({ session, token }) {
-      // Attach the id to session.user so it's available everywhere
       if (session.user) {
         session.user.id = token.id as string
       }
