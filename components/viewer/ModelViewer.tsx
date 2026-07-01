@@ -936,7 +936,6 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
           <ToolBtn icon={<ZoomIn size={12} />}    label="Zoom in"     onClick={() => setZoomDelta(1.5)} />
           <ToolBtn icon={<ZoomOut size={12} />}   label="Zoom out"    onClick={() => setZoomDelta(-1.5)} />
           <ToolBtn icon={<Box size={12} />}       label="Wireframe"   active={wireframe}   onClick={() => setWireframe(w => !w)} />
-          <ToolBtn icon={<span style={{ fontSize: '10px' }}>\ud83c\udf21</span>} label="Stress heatmap" active={false} onClick={handleHeatmapClick} />
           <ToolBtn icon={<Grid3x3 size={12} />}   label="Toggle grid" active={gridVisible} onClick={() => setGrid(g => !g)} />
         </div>
 
