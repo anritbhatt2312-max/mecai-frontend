@@ -442,7 +442,7 @@ export default function Sidebar({ open, onToggle, onNavigate, onSearchOpen, dark
                   onMouseEnter={e => { if (activeChat !== chat.id) e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.07)' }}
                   onMouseLeave={e => { if (activeChat !== chat.id) e.currentTarget.style.backgroundColor = 'transparent' }}>
                   <span style={{ fontSize: '13px', color: activeChat === chat.id ? 'white' : 'rgba(255,255,255,0.65)', fontWeight: activeChat === chat.id ? 500 : 400, fontFamily: F, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{chat.title}</span>
-                  <span style={{ fontSize: '9px', fontWeight: 400, color: 'rgba(255,255,255,0.25)', letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: F, flexShrink: 0, marginLeft: '6px' }}>{chat.time}</span>
+                
                 </button>
               ))}
             </>
