@@ -8,6 +8,7 @@ import ProjectsPage from '@/components/ProjectsPage'
 import { useSmartSuggestions, trackMessage } from '@/hooks/useSmartSuggestions'
 import { ArrowUp, X, Search, StopCircle, Download } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import ModelViewer, { ModelType, ShapeDimensions } from '@/components/viewer/ModelViewer'
 import Sidebar, { SIDEBAR_EXPANDED, SIDEBAR_COLLAPSED, ThemePreference } from '@/components/sidebar/Sidebar'
 
@@ -720,7 +721,7 @@ const lines = splitLines(cleanedResponse || 'No response received.')
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
                                   {msg.lines.slice(0, msg.visibleLines).map((line, li) => (
                                     <div key={li} className="mecai-markdown" style={{ fontSize: '16px', fontWeight: 300, lineHeight: '1.8', color: textPrimary, fontFamily: F, animation: 'fadeSlideIn 0.35s ease forwards' }}>
-                                      <ReactMarkdown>{line}</ReactMarkdown>
+                                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{line}</ReactMarkdown>
                                     </div>
                                   ))}
                                   {isStreaming && i === messages.length - 1 && msg.visibleLines < msg.lines.length && (
