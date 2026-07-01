@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { DM_Sans } from 'next/font/google'
 import './globals.css'
 import { Providers } from './providers'
-import CookieBanner from '@/components/CookieBanner'  // ← add this
+import CookieBanner from '@/components/CookieBanner'
 
 const dmSans = DM_Sans({
   subsets: ['latin'],
@@ -13,6 +13,9 @@ const dmSans = DM_Sans({
 export const metadata: Metadata = {
   title: 'MecAI',
   description: 'AI-powered mechanical engineering assistant',
+  icons: {
+    icon: '/favicon.svg',
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -20,7 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body className={dmSans.className}>
         <Providers>{children}</Providers>
-        <CookieBanner />  {/* ← add this */}
+        <CookieBanner />
       </body>
     </html>
   )
