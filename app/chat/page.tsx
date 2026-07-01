@@ -312,12 +312,14 @@ export default function ChatPage() {
   }, [])
 
   useEffect(() => {
+    console.log('session user:', session?.user)
     if (!session?.user?.id) return
     fetch(`${CONVERSATIONS_API}/${session.user.id}`)
       .then(r => r.ok ? r.json() : [])
-      .then((data: Conversation[]) => {
-        if (!Array.isArray(data)) return
-        const formatted = data.map(c => ({
+      .then((res: { conversations: Conversation[] } | Conversation[]) => {
+  const data = Array.isArray(res) ? res : (res as { conversations: Conversation[] }).conversations ?? []
+  if (!Array.isArray(data)) return
+  const formatted = data.map(c => ({
           id: c.id,
           title: c.title ?? 'Untitled conversation',
           time: formatConversationTime(c.updated_at),
