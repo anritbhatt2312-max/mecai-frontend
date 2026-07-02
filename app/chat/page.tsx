@@ -346,7 +346,7 @@ export default function ChatPage() {
       if (!res.ok) return
       const data = await res.json()
       if (!Array.isArray(data.messages)) return
-      const loaded: ChatMessage[] = data.messages.map((m: { role: string; content: string }) => {
+      const loaded: ChatMessage[] = data.messages.map((m: { role: string; content: string; has_stl?: boolean; stl_url?: string }) => {
         const content = m.role === 'assistant'
           ? (m.content ?? '').replace(/COMPONENT_REQUEST[\s\S]*?END_COMPONENT_REQUEST/g, '').replace(/ASSEMBLY_REQUEST[\s\S]*?END_ASSEMBLY_REQUEST/g, '').trim()
           : m.content
@@ -356,6 +356,26 @@ export default function ChatPage() {
           visibleLines: m.role === 'assistant' ? splitLines(content).length : 1,
         }
       })
+
+      // Restore the last STL from this conversation
+      const lastStlMessage = [...data.messages].reverse().find((m: { has_stl?: boolean; stl_url?: string }) => m.has_stl && m.stl_url)
+      if (lastStlMessage) {
+        setCurrentStlUrl(lastStlMessage.stl_url)
+        setViewerOpen(true)
+        setActiveModel('cube')
+        const specMatch = lastStlMessage.content?.match(/type:\s*(.+)/i)
+        const dimsMatch = lastStlMessage.content?.match(/dimensions:\s*(.+)/i)
+        const materialMatch = lastStlMessage.content?.match(/material:\s*(.+)/i)
+        setRealSpecs({
+          type: specMatch ? specMatch[1].trim() : '',
+          dimensions: dimsMatch ? dimsMatch[1].trim() : '',
+          material: materialMatch ? materialMatch[1].trim() : '',
+        })
+      } else {
+        setCurrentStlUrl(null)
+        setRealSpecs(null)
+      }
+
       setMessages(loaded)
       setCurrentConversationId(conversationId)
       setChatKey(k => k + 1)
