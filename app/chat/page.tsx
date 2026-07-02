@@ -346,11 +346,16 @@ export default function ChatPage() {
       if (!res.ok) return
       const data = await res.json()
       if (!Array.isArray(data.messages)) return
-      const loaded: ChatMessage[] = data.messages.map((m: { role: string; content: string }) => ({
-        role: m.role as 'user' | 'assistant',
-        lines: m.role === 'assistant' ? splitLines(m.content) : [m.content],
-        visibleLines: m.role === 'assistant' ? splitLines(m.content).length : 1,
-      }))
+      const loaded: ChatMessage[] = data.messages.map((m: { role: string; content: string }) => {
+        const content = m.role === 'assistant'
+          ? (m.content ?? '').replace(/COMPONENT_REQUEST[\s\S]*?END_COMPONENT_REQUEST/g, '').replace(/ASSEMBLY_REQUEST[\s\S]*?END_ASSEMBLY_REQUEST/g, '').trim()
+          : m.content
+        return {
+          role: m.role as 'user' | 'assistant',
+          lines: m.role === 'assistant' ? splitLines(content) : [content],
+          visibleLines: m.role === 'assistant' ? splitLines(content).length : 1,
+        }
+      })
       setMessages(loaded)
       setCurrentConversationId(conversationId)
       setChatKey(k => k + 1)
