@@ -342,7 +342,7 @@ export default function ChatPage() {
   const loadConversation = useCallback(async (conversationId: string) => {
     if (!session?.user?.id) return
     try {
-      const res = await fetch(`${CONVERSATIONS_API}/${session.user.id}/${conversationId}`)
+      const res = await fetch(`${CONVERSATIONS_API}/${conversationId}/messages`)
       if (!res.ok) return
       const data = await res.json()
       if (!Array.isArray(data.messages)) return
