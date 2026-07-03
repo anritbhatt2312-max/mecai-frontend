@@ -551,11 +551,11 @@ const lines = splitLines(cleanedResponse || 'No response received.')
 
   useEffect(() => {
     const fn = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { setSearchOpen(false); setSearchQuery('') }
+      if (e.key === 'Escape') { setSearchOpen(false); setSearchQuery(''); setViewerOpen(false); setActiveModel('empty'); setPendingModel('empty') }
       if (e.metaKey && e.key === 'Enter') { sendMessage(input) }
       if (e.metaKey && e.key === 'k') { e.preventDefault(); handleNavigate('home') }
       if (e.metaKey && e.key === 'b') { e.preventDefault(); setSidebarOpen(o => !o) }
-      if (e.metaKey && e.key === 'e') { e.preventDefault(); setViewerOpen(false); setActiveModel('empty'); setPendingModel('empty') }
+      if (e.metaKey && e.key === 'e') { e.preventDefault(); document.querySelector<HTMLButtonElement>('[title="Export STL"]')?.click() }
     }
     window.addEventListener('keydown', fn)
     return () => window.removeEventListener('keydown', fn)
