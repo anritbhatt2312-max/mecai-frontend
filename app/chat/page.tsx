@@ -4,10 +4,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import LoginTransition from '@/components/LoginTransition'
+import ProjectsPage from '@/components/ProjectsPage'
 import { useSmartSuggestions, trackMessage } from '@/hooks/useSmartSuggestions'
 import { ArrowUp, X, Search, StopCircle, Download } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import ModelViewer, { ModelType, ShapeDimensions } from '@/components/viewer/ModelViewer'
 import Sidebar, { SIDEBAR_EXPANDED, SIDEBAR_COLLAPSED, ThemePreference } from '@/components/sidebar/Sidebar'
 
@@ -63,9 +63,12 @@ function DownloadButtons({ urls, darkMode }: { urls: CadUrls; darkMode: boolean 
 const EMPTY_CHATS: { id: string; title: string; time: string }[] = []
 
 function splitLines(text: string): string[] {
-  return [text]
+  return text
+    .split(/\n\s*\n/)
+    .map(block => block.trim())
+    .filter(block => block.length > 0)
 }
-  
+
 function detectStatusWord(prompt: string): string {
   const p = prompt.toLowerCase()
   const calcKeywords = ['calculate', 'stress', 'force', 'torque', 'load', 'pressure', 'strain', 'deflection', 'formula', 'equation', 'rpm', 'velocity', 'acceleration', 'fos', 'factor of safety', 'fea', 'fatigue']
@@ -228,7 +231,7 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [statusWord, setStatusWord] = useState('Thinking')
-  const [viewerOpen, setViewerOpen] = useState(false)
+  const [viewerOpen, setViewerOpen] = useState(true)
   const [viewerWidth, setViewerWidth] = useState(
     typeof window !== 'undefined' ? Math.floor(window.innerWidth * 0.45) : 480
   )
@@ -238,6 +241,7 @@ export default function ChatPage() {
   const [themePreference, setThemePreference] = useState<ThemePreference>('system')
   const [systemDark, setSystemDark] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeModel, setActiveModel] = useState<ModelType>('empty')
@@ -261,7 +265,7 @@ export default function ChatPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const inChat = messages.length > 0
-  const sidebarWidth = sidebarOpen ? SIDEBAR_EXPANDED : SIDEBAR_COLLAPSED
+  const sidebarWidth = isMobile ? 0 : (sidebarOpen ? SIDEBAR_EXPANDED : SIDEBAR_COLLAPSED)
 
   const [units, setUnits] = useState<'Metric (mm, MPa)' | 'Imperial (in, psi)'>('Metric (mm, MPa)')
   const [language, setLanguage] = useState('English')
@@ -284,6 +288,9 @@ export default function ChatPage() {
 
   useEffect(() => {
     setMounted(true)
+    setIsMobile(window.innerWidth < 768)
+    const onResize = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', onResize)
     const saved = localStorage.getItem('mecai_theme') as ThemePreference | null
     if (saved) setThemePreference(saved)
     try {
@@ -311,14 +318,12 @@ export default function ChatPage() {
   }, [])
 
   useEffect(() => {
-  if (!session?.user?.id) return
-    fetch("https://web-production-9f493.up.railway.app/auth/upsert-user", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ user_id: session.user.id, email: session.user.email ?? "", name: session.user.name ?? "" }) }).catch(() => {})
-  fetch(`${CONVERSATIONS_API}/${session.user.id}`)
+    if (!session?.user?.id) return
+    fetch(`${CONVERSATIONS_API}/${session.user.id}`)
       .then(r => r.ok ? r.json() : [])
-      .then((res: { conversations: Conversation[] } | Conversation[]) => {
-  const data = Array.isArray(res) ? res : (res as { conversations: Conversation[] }).conversations ?? []
-  if (!Array.isArray(data)) return
-  const formatted = data.map(c => ({
+      .then((data: Conversation[]) => {
+        if (!Array.isArray(data)) return
+        const formatted = data.map(c => ({
           id: c.id,
           title: c.title ?? 'Untitled conversation',
           time: formatConversationTime(c.updated_at),
@@ -343,49 +348,20 @@ export default function ChatPage() {
 
   const loadConversation = useCallback(async (conversationId: string) => {
     if (!session?.user?.id) return
-    setIsLoadingChat(true)
     try {
-      const res = await fetch(`${CONVERSATIONS_API}/${conversationId}/messages`)
+      const res = await fetch(`${CONVERSATIONS_API}/${session.user.id}/${conversationId}`)
       if (!res.ok) return
       const data = await res.json()
       if (!Array.isArray(data.messages)) return
-      const loaded: ChatMessage[] = data.messages.map((m: { role: string; content: string; has_stl?: boolean; stl_url?: string }) => {
-        const content = m.role === 'assistant'
-          ? (m.content ?? '').replace(/COMPONENT_REQUEST[\s\S]*?END_COMPONENT_REQUEST/g, '').replace(/ASSEMBLY_REQUEST[\s\S]*?END_ASSEMBLY_REQUEST/g, '').trim()
-          : m.content
-        return {
-          role: m.role as 'user' | 'assistant',
-          lines: m.role === 'assistant' ? splitLines(content) : [content],
-          visibleLines: m.role === 'assistant' ? splitLines(content).length : 1,
-        }
-      })
-
-      // Restore the last STL from this conversation
-      const lastStlMessage = [...data.messages].reverse().find((m: { has_stl?: boolean; stl_url?: string }) => m.has_stl && m.stl_url)
-      if (lastStlMessage) {
-        setCurrentStlUrl(lastStlMessage.stl_url)
-        setViewerOpen(true)
-        setActiveModel('cube')
-        const specMatch = lastStlMessage.content?.match(/type:\s*(.+)/i)
-        const dimsMatch = lastStlMessage.content?.match(/dimensions:\s*(.+)/i)
-        const materialMatch = lastStlMessage.content?.match(/material:\s*(.+)/i)
-        setRealSpecs({
-          type: specMatch ? specMatch[1].trim() : '',
-          dimensions: dimsMatch ? dimsMatch[1].trim() : '',
-          material: materialMatch ? materialMatch[1].trim() : '',
-        })
-      } else {
-        setCurrentStlUrl(null)
-        setRealSpecs(null)
-      }
-
+      const loaded: ChatMessage[] = data.messages.map((m: { role: string; content: string }) => ({
+        role: m.role as 'user' | 'assistant',
+        lines: m.role === 'assistant' ? splitLines(m.content) : [m.content],
+        visibleLines: m.role === 'assistant' ? splitLines(m.content).length : 1,
+      }))
       setMessages(loaded)
       setCurrentConversationId(conversationId)
       setChatKey(k => k + 1)
     } catch {}
-    finally {
-      setIsLoadingChat(false)
-    }
   }, [session?.user?.id])
   useEffect(() => { if (searchOpen) setTimeout(() => searchInputRef.current?.focus(), 60) }, [searchOpen])
 
@@ -451,11 +427,7 @@ export default function ChatPage() {
         })
       }
 
-      const cleanedResponse = (data.response ?? '')
-  .replace(/COMPONENT_REQUEST[\s\S]*?END_COMPONENT_REQUEST/g, '')
-  .replace(/ASSEMBLY_REQUEST[\s\S]*?END_ASSEMBLY_REQUEST/g, '')
-  .trim()
-const lines = splitLines(cleanedResponse || 'No response received.')
+      const lines = splitLines(data.response ?? 'No response received.')
 
       const cadUrls: CadUrls = {
         stl_url:  data.stl_url  ?? null,
@@ -580,7 +552,7 @@ const lines = splitLines(cleanedResponse || 'No response received.')
     input, onChange: setInput, onKeyDown: handleKeyDown,
     onSend: () => sendMessage(input), onStop: stopStreaming,
     isStreaming, surface, border, textPrimary, textMuted,
-    darkMode: dm, textareaRef: textareaRef as React.RefObject<HTMLTextAreaElement>, placeholder: '',
+    darkMode: dm, textareaRef, placeholder: '',
     disclaimer: t('disclaimer'),
   }
 
@@ -663,12 +635,12 @@ const lines = splitLines(cleanedResponse || 'No response received.')
         chats={conversations.length > 0 ? conversations : EMPTY_CHATS}
         surface={surface} border={border}
         textPrimary={textPrimary} textMuted={textMuted} darkMode={dm}
-        inputRef={searchInputRef as React.RefObject<HTMLInputElement>} sidebarWidth={sidebarWidth}
+        inputRef={searchInputRef} sidebarWidth={sidebarWidth}
         viewerWidth={viewerWidth} viewerOpen={viewerOpen}
         onSelectChat={loadConversation}
       />
 
-      <div style={{ position: 'fixed', top: 0, right: viewerOpen ? 0 : -(viewerWidth + 10), width: viewerWidth, height: '100vh', zIndex: 100, transition: isDragging ? 'none' : 'right 0.45s cubic-bezier(0.16,1,0.3,1)', willChange: 'right', display: 'flex' }}>
+      <div style={{ position: 'fixed', top: 0, right: viewerOpen ? 0 : -(viewerWidth + 10), width: viewerWidth, height: '100vh', zIndex: 100, transition: isDragging ? 'none' : 'right 0.45s cubic-bezier(0.16,1,0.3,1)', willChange: 'right', display: isMobile ? 'none' : 'flex' }}>
         {viewerOpen && (
           <div onMouseDown={handleDragStart} style={{ position: 'absolute', left: -16, top: 0, width: '32px', height: '100%', cursor: 'col-resize', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             onMouseEnter={e => {
@@ -708,13 +680,13 @@ const lines = splitLines(cleanedResponse || 'No response received.')
         </div>
       </div>
 
-      <main style={{ height: '100vh', backgroundColor: bg, display: 'flex', flexDirection: 'column', fontFamily: F, marginLeft: sidebarWidth, marginRight: viewerOpen ? viewerWidth : 0, transition: isDragging ? 'none' : 'margin-left 0.35s cubic-bezier(0.25,0.46,0.45,0.94), margin-right 0.4s cubic-bezier(0.25,0.46,0.45,0.94)', willChange: 'margin-left, margin-right', boxSizing: 'border-box', overflow: 'hidden' }}>
+      <main style={{ height: '100vh', backgroundColor: bg, display: 'flex', flexDirection: 'column', fontFamily: F, marginLeft: sidebarWidth, marginRight: isMobile ? 0 : (viewerOpen ? viewerWidth : 0), transition: isDragging ? 'none' : 'margin-left 0.35s cubic-bezier(0.25,0.46,0.45,0.94), margin-right 0.4s cubic-bezier(0.25,0.46,0.45,0.94)', willChange: 'margin-left, margin-right', boxSizing: 'border-box', overflow: 'hidden' }}>
 
         <div style={{ position: 'relative', zIndex: 48, backgroundColor: bg, height: '52px', display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', padding: '0 20px', flexShrink: 0 }}>
           <div />
           <AppWordmark darkMode={dm} onClick={() => handleNavigate('home')} />
           <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
-            {!viewerOpen && (
+            {!viewerOpen && !isMobile && (
               <button onClick={() => setViewerOpen(true)} style={{ padding: '6px 12px', borderRadius: '7px', border: `1px solid ${border}`, backgroundColor: 'transparent', fontSize: '11px', fontWeight: 400, letterSpacing: '0.02em', fontFamily: F, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', color: textMuted, transition: 'color 0.15s, border-color 0.15s' }}
                 onMouseEnter={e => { const el = e.currentTarget as HTMLButtonElement; el.style.color = textPrimary; el.style.borderColor = '#aaa' }}
                 onMouseLeave={e => { const el = e.currentTarget as HTMLButtonElement; el.style.color = textMuted; el.style.borderColor = border }}>
@@ -726,14 +698,7 @@ const lines = splitLines(cleanedResponse || 'No response received.')
 
         {page === 'home' && (
           <div key={chatKey} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-            {isLoadingChat ? (
-  <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-      <div style={{ width: '24px', height: '24px', borderRadius: '50%', border: `2px solid ${border}`, borderTopColor: '#63b3ed', animation: 'spin 0.8s linear infinite' }} />
-      <span style={{ fontSize: '12px', color: textMuted, fontFamily: F }}>Loading conversation...</span>
-    </div>
-  </div>
-) : inChat ? (
+            {inChat ? (
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                 <div style={{ flex: 1, overflowY: 'auto', padding: '32px 24px', boxSizing: 'border-box' }}>
                   <div style={{ maxWidth: '700px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '28px' }}>
@@ -763,11 +728,29 @@ const lines = splitLines(cleanedResponse || 'No response received.')
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
                                   {msg.lines.slice(0, msg.visibleLines).map((line, li) => (
                                     <div key={li} className="mecai-markdown" style={{ fontSize: '16px', fontWeight: 300, lineHeight: '1.8', color: textPrimary, fontFamily: F, animation: 'fadeSlideIn 0.35s ease forwards' }}>
-                                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{line}</ReactMarkdown>
+                                      <ReactMarkdown>{line}</ReactMarkdown>
                                     </div>
                                   ))}
                                   {isStreaming && i === messages.length - 1 && msg.visibleLines < msg.lines.length && (
                                     <span style={{ display: 'inline-block', width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#0a1628', marginTop: '6px', animation: 'blink 0.8s infinite' }} />
+                                  )}
+                                  {/* Mobile 3D file card */}
+                                  {isMobile && (msg as AssistantMessage).cadUrls?.stl_url && (
+                                    <button
+                                      onClick={() => { setCurrentStlUrl((msg as AssistantMessage).cadUrls!.stl_url); setViewerOpen(true); setActiveModel('cube') }}
+                                      style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '12px', padding: '10px 14px', borderRadius: '10px', border: `1px solid ${border}`, backgroundColor: dm ? '#161b22' : '#f5f5f5', cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'border-color 0.15s' }}
+                                    >
+                                      <div style={{ width: '36px', height: '36px', borderRadius: '8px', backgroundColor: '#0a1628', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                        <CadIcon />
+                                      </div>
+                                      <div>
+                                        <p style={{ margin: 0, fontSize: '13px', fontWeight: 500, color: textPrimary, fontFamily: F }}>3D Model</p>
+                                        <p style={{ margin: 0, fontSize: '11px', color: textMuted, fontFamily: F }}>Tap to open in viewer</p>
+                                      </div>
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 'auto', flexShrink: 0 }}>
+                                        <path d="M9 18l6-6-6-6"/>
+                                      </svg>
+                                    </button>
                                   )}
                                 </div>
                               )}
@@ -797,6 +780,7 @@ const lines = splitLines(cleanedResponse || 'No response received.')
                         {mounted ? subGreeting() : 'What are you building today?'}
                       </p>
                     </div>
+                    {!isMobile && (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', width: '100%' }}>
                       {isPersonalised && (
                         <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
@@ -816,9 +800,10 @@ const lines = splitLines(cleanedResponse || 'No response received.')
                         </button>
                       ))}
                     </div>
+                    )}
                   </div>
                 </div>
-                <div style={{ padding: '20px 32px 24px', flexShrink: 0, animation: 'cardFadeUp 0.5s cubic-bezier(0.22,0.68,0,1.2) both', animationDelay: '0.45s' }}>
+                <div style={{ padding: isMobile ? '12px 16px 20px' : '20px 32px 24px', flexShrink: 0, animation: 'cardFadeUp 0.5s cubic-bezier(0.22,0.68,0,1.2) both', animationDelay: '0.45s' }}>
                   <div style={{ maxWidth: '660px', margin: '0 auto' }}>
                     <InputBar {...inputBarProps} placeholder={t('placeholder')} />
                   </div>
@@ -828,6 +813,9 @@ const lines = splitLines(cleanedResponse || 'No response received.')
           </div>
         )}
 
+        {page === 'projects' && (
+          <ProjectsPage darkMode={dm} textPrimary={textPrimary} textMuted={textMuted} border={border} bg={bg} />
+        )}
       </main>
     {exportMenuOpen && currentCadUrls && (
   <>
