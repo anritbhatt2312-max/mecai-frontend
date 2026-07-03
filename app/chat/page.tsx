@@ -529,7 +529,7 @@ const lines = splitLines(cleanedResponse || 'No response received.')
       setIsStreaming(false)
     }
   }, [isStreaming, session, currentConversationId])
-
+  const stopStreaming = useCallback(() => { abortRef.current = true; setIsStreaming(false) }, [])
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input) }
   }, [input, sendMessage])
