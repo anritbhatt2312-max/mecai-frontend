@@ -1,6 +1,8 @@
 // app/page.tsx — Landing page, mobile optimised
 'use client'
 import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
+import { useEffect } from 'react'
 
 const F = "'Neue Montreal', 'Helvetica Neue', Helvetica, Arial, sans-serif"
 const DARK_BLUE = '#02195C'
@@ -49,6 +51,10 @@ const features = [
 
 export default function LandingPage() {
   const router = useRouter()
+  const { status } = useSession()
+  useEffect(() => {
+    if (status === 'authenticated') router.replace('/chat')
+  }, [status, router])
 
   return (
     <>
