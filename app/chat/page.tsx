@@ -349,20 +349,44 @@ export default function ChatPage() {
 
   const loadConversation = useCallback(async (conversationId: string) => {
     if (!session?.user?.id) return
+    setIsLoadingChat(true)
     try {
       const res = await fetch(`${CONVERSATIONS_API}/${conversationId}/messages`)
       if (!res.ok) return
       const data = await res.json()
       if (!Array.isArray(data.messages)) return
-      const loaded: ChatMessage[] = data.messages.map((m: { role: string; content: string }) => ({
-        role: m.role as 'user' | 'assistant',
-        lines: m.role === 'assistant' ? splitLines(m.content) : [m.content],
-        visibleLines: m.role === 'assistant' ? splitLines(m.content).length : 1,
-      }))
+      const loaded: ChatMessage[] = data.messages.map((m: { role: string; content: string; has_stl?: boolean; stl_url?: string }) => {
+        const content = m.role === 'assistant'
+          ? (m.content ?? '').replace(/COMPONENT_REQUEST[\s\S]*?END_COMPONENT_REQUEST/g, '').replace(/ASSEMBLY_REQUEST[\s\S]*?END_ASSEMBLY_REQUEST/g, '').trim()
+          : m.content
+        return {
+          role: m.role as 'user' | 'assistant',
+          lines: m.role === 'assistant' ? splitLines(content) : [content],
+          visibleLines: m.role === 'assistant' ? splitLines(content).length : 1,
+        }
+      })
+      const lastStlMessage = [...data.messages].reverse().find((m: { has_stl?: boolean; stl_url?: string }) => m.has_stl && m.stl_url)
+      if (lastStlMessage) {
+        setCurrentStlUrl(lastStlMessage.stl_url)
+        setViewerOpen(true)
+        setActiveModel('cube')
+        const specMatch = lastStlMessage.content?.match(/type:\s*(.+)/i)
+        const dimsMatch = lastStlMessage.content?.match(/dimensions:\s*(.+)/i)
+        const materialMatch = lastStlMessage.content?.match(/material:\s*(.+)/i)
+        setRealSpecs({
+          type: specMatch ? specMatch[1].trim() : '',
+          dimensions: dimsMatch ? dimsMatch[1].trim() : '',
+          material: materialMatch ? materialMatch[1].trim() : '',
+        })
+      } else {
+        setCurrentStlUrl(null)
+        setRealSpecs(null)
+      }
       setMessages(loaded)
       setCurrentConversationId(conversationId)
       setChatKey(k => k + 1)
     } catch {}
+    finally { setIsLoadingChat(false) }
   }, [session?.user?.id])
   useEffect(() => { if (searchOpen) setTimeout(() => searchInputRef.current?.focus(), 60) }, [searchOpen])
 
