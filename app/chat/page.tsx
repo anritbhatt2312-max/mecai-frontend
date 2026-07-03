@@ -320,8 +320,9 @@ export default function ChatPage() {
   useEffect(() => {
     if (!session?.user?.id) return
     fetch(`${CONVERSATIONS_API}/${session.user.id}`)
-      .then(r => r.ok ? r.json() : [])
-      .then((data: Conversation[]) => {
+     .then(r => r.ok ? r.json() : [])
+      .then((res: { conversations: Conversation[] } | Conversation[]) => {
+        const data = Array.isArray(res) ? res : (res as { conversations: Conversation[] }).conversations ?? []
         if (!Array.isArray(data)) return
         const formatted = data.map(c => ({
           id: c.id,
@@ -349,7 +350,7 @@ export default function ChatPage() {
   const loadConversation = useCallback(async (conversationId: string) => {
     if (!session?.user?.id) return
     try {
-      const res = await fetch(`${CONVERSATIONS_API}/${session.user.id}/${conversationId}`)
+      const res = await fetch(`${CONVERSATIONS_API}/${conversationId}/messages`)
       if (!res.ok) return
       const data = await res.json()
       if (!Array.isArray(data.messages)) return
