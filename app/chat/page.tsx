@@ -723,7 +723,14 @@ export default function ChatPage() {
 
         {page === 'home' && (
           <div key={chatKey} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-            {inChat ? (
+            {isLoadingChat ? (
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ width: '24px', height: '24px', borderRadius: '50%', border: `2px solid ${border}`, borderTopColor: '#63b3ed', animation: 'spin 0.8s linear infinite' }} />
+                  <span style={{ fontSize: '12px', color: textMuted, fontFamily: F }}>Loading conversation...</span>
+                </div>
+              </div>
+            ) : inChat ? (
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                 <div style={{ flex: 1, overflowY: 'auto', padding: '32px 24px', boxSizing: 'border-box' }}>
                   <div style={{ maxWidth: '700px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '28px' }}>
