@@ -387,17 +387,6 @@ export default function ChatPage() {
     }
   }, [session?.user?.id])
   useEffect(() => { if (searchOpen) setTimeout(() => searchInputRef.current?.focus(), 60) }, [searchOpen])
-  useEffect(() => {
-    const fn = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { setSearchOpen(false); setSearchQuery('') }
-      if (e.metaKey && e.key === 'Enter') { sendMessage(input) }
-      if (e.metaKey && e.key === 'k') { e.preventDefault(); handleNavigate('home') }
-      if (e.metaKey && e.key === 'b') { e.preventDefault(); setSidebarOpen(o => !o) }
-      if (e.metaKey && e.key === 'e') { e.preventDefault(); setViewerOpen(false); setActiveModel('empty'); setPendingModel('empty') }
-    }
-    window.addEventListener('keydown', fn)
-    return () => window.removeEventListener('keydown', fn)
-  }, [input, sendMessage, handleNavigate])
 
   useEffect(() => {
     if (showTransition) return
@@ -541,8 +530,6 @@ const lines = splitLines(cleanedResponse || 'No response received.')
     }
   }, [isStreaming, session, currentConversationId])
 
-  const stopStreaming = useCallback(() => { abortRef.current = true; setIsStreaming(false) }, [])
-
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input) }
   }, [input, sendMessage])
@@ -561,6 +548,18 @@ const lines = splitLines(cleanedResponse || 'No response received.')
     if (p === 'home') setChatKey(k => k + 1)
     setTimeout(() => textareaRef.current?.focus(), 100)
   }, [])
+
+  useEffect(() => {
+    const fn = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setSearchOpen(false); setSearchQuery('') }
+      if (e.metaKey && e.key === 'Enter') { sendMessage(input) }
+      if (e.metaKey && e.key === 'k') { e.preventDefault(); handleNavigate('home') }
+      if (e.metaKey && e.key === 'b') { e.preventDefault(); setSidebarOpen(o => !o) }
+      if (e.metaKey && e.key === 'e') { e.preventDefault(); setViewerOpen(false); setActiveModel('empty'); setPendingModel('empty') }
+    }
+    window.addEventListener('keydown', fn)
+    return () => window.removeEventListener('keydown', fn)
+  }, [input, sendMessage, handleNavigate])
 
   const darkMode = themePreference === 'dark' ? true : themePreference === 'light' ? false : systemDark
   const dm = mounted && darkMode
