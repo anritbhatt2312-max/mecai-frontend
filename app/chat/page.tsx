@@ -253,6 +253,8 @@ export default function ChatPage() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [chatKey, setChatKey] = useState(0)
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null)
+  const [isLoadingChat, setIsLoadingChat] = useState(false)
+  const [exportMenuOpen, setExportMenuOpen] = useState(false)
   const [conversations, setConversations] = useState<{ id: string; title: string; time: string }[]>([])
 
   const { cards: promptCards, isPersonalised } = useSmartSuggestions()
@@ -522,11 +524,11 @@ export default function ChatPage() {
 
   useEffect(() => {
     const fn = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { setSearchOpen(false); setSearchQuery(''); setViewerOpen(false); setActiveModel('empty'); setPendingModel('empty') }
+      if (e.key === 'Escape') { setSearchOpen(false); setSearchQuery(''); setViewerOpen(false); setActiveModel('empty'); setPendingModel('empty'); setExportMenuOpen(false) }
       if (e.metaKey && e.key === 'Enter') { sendMessage(input) }
       if (e.metaKey && e.key === 'k') { e.preventDefault(); handleNavigate('home') }
       if (e.metaKey && e.key === 'b') { e.preventDefault(); setSidebarOpen(o => !o) }
-      if (e.metaKey && e.key === 'e') { e.preventDefault(); document.querySelector<HTMLButtonElement>('[title="Export STL"]')?.click() }
+      if (e.metaKey && e.key === 'e') { e.preventDefault(); if (currentCadUrls?.stl_url || currentCadUrls?.step_url || currentCadUrls?.dxf_url) setExportMenuOpen(o => !o) }
     }
     window.addEventListener('keydown', fn)
     return () => window.removeEventListener('keydown', fn)
@@ -815,6 +817,32 @@ export default function ChatPage() {
           <ProjectsPage darkMode={dm} textPrimary={textPrimary} textMuted={textMuted} border={border} bg={bg} />
         )}
       </main>
-    </>
+    {exportMenuOpen && currentCadUrls && (
+  <>
+    <div onClick={() => setExportMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 199 }} />
+    <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 200, backgroundColor: dm ? '#161b22' : '#ffffff', border: `1px solid ${border}`, borderRadius: '12px', padding: '20px', boxShadow: dm ? '0 24px 64px rgba(0,0,0,0.6)' : '0 8px 40px rgba(0,0,0,0.15)', minWidth: '220px' }}>
+      <p style={{ margin: '0 0 14px', fontSize: '11px', fontWeight: 600, color: textMuted, fontFamily: F, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Export Model</p>
+      {[
+        { label: 'STL File', sublabel: '3D print / mesh', url: currentCadUrls.stl_url, ext: 'stl' },
+        { label: 'STEP File', sublabel: 'CAD / manufacturing', url: currentCadUrls.step_url, ext: 'step' },
+        { label: 'DXF File', sublabel: '2D drawing', url: currentCadUrls.dxf_url, ext: 'dxf' },
+      ].filter(b => b.url).map(({ label, sublabel, url, ext }) => (
+        <a key={ext} href={url!} download target="_blank" rel="noopener noreferrer"
+          onClick={() => setExportMenuOpen(false)}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderRadius: '8px', border: `1px solid ${border}`, marginBottom: '8px', textDecoration: 'none', transition: 'background 0.15s', cursor: 'pointer', backgroundColor: 'transparent' }}
+          onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }}
+          onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = 'transparent' }}>
+          <div>
+            <p style={{ margin: 0, fontSize: '13px', fontWeight: 500, color: textPrimary, fontFamily: F }}>{label}</p>
+            <p style={{ margin: 0, fontSize: '11px', fontWeight: 300, color: textMuted, fontFamily: F }}>{sublabel}</p>
+          </div>
+          <Download size={14} color={textMuted} />
+        </a>
+      ))}
+    </div>
+  </>
+)}
+</>
   )
 }
+  
