@@ -169,7 +169,7 @@ export default function LandingPage() {
         </p>
 
         <div className="hero-actions" style={{ display: 'flex', gap: 12, justifyContent: 'center', marginBottom: 60, width: '100%', maxWidth: 400 }}>
-          <button className="btn-primary" onClick={() => router.push('/auth?tab=signup')} style={{ fontFamily: F, fontSize: 14, fontWeight: 500, color: DARK_BLUE, background: MOON, border: 'none', borderRadius: 4, padding: '13px 28px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8, flex: 1 }}>
+          <button className="btn-primary" onClick={() => router.push('/auth?tab=signup')} style={{ fontFamily: F, fontSize: 14, fontWeight: 500, color: DARK_BLUE, background: MOON, border: 'none', borderRadius: 4, padding: '13px 28px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
             Start Generating →
           </button>
         </div>
