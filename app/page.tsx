@@ -56,6 +56,7 @@ export default function LandingPage() {
     if (status === 'authenticated') router.replace('/chat')
   }, [status, router])
 
+  if (status === 'loading' || status === 'authenticated') return null
   return (
     <>
       <style>{`
