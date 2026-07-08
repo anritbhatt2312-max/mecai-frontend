@@ -51,6 +51,8 @@ function AuthContent() {
     if (t === 'login' || t === 'signup') setTab(t)
   }, [params])
 
+  const isInAppBrowser = typeof window !== 'undefined' && /Instagram|FBAN|FBAV|LinkedIn|WhatsApp|Twitter|Line|WeChat|MicroMessenger/.test(navigator.userAgent)
+
   function socialAuth(provider: 'google') {
     if (provider === 'google') {
       signIn('google', { callbackUrl: '/chat' })
@@ -133,6 +135,11 @@ function AuthContent() {
             ))}
           </div>
 
+          {isInAppBrowser && (
+            <div style={{ marginBottom: '16px', padding: '12px 16px', backgroundColor: 'rgba(255,200,0,0.1)', border: '1px solid rgba(255,200,0,0.3)', borderRadius: '8px', fontSize: '13px', color: '#CCDEFF', fontFamily: F, lineHeight: 1.5 }}>
+              ⚠️ Please open this link in <strong>Chrome or Safari</strong> to sign in with Google. Tap the menu (⋯) and select "Open in browser".
+            </div>
+          )}
           <button className="social-btn" onClick={() => socialAuth('google')} style={{
             width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
             gap: 10, padding: '14px 20px', borderRadius: 8, border: 'none',
