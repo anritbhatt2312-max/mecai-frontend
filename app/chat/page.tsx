@@ -254,6 +254,7 @@ export default function ChatPage() {
   const [chatKey, setChatKey] = useState(0)
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null)
   const [isLoadingChat, setIsLoadingChat] = useState(false)
+  const conversationCache = useRef<Record<string, { messages: ChatMessage[]; stlUrl: string | null; specs: { type: string; dimensions: string; material: string } | null }>>({})
   const [exportMenuOpen, setExportMenuOpen] = useState(false)
   const [conversations, setConversations] = useState<{ id: string; title: string; time: string }[]>([])
 
@@ -349,6 +350,22 @@ export default function ChatPage() {
 
   const loadConversation = useCallback(async (conversationId: string) => {
     if (!session?.user?.id) return
+    if (conversationCache.current[conversationId]) {
+      const cached = conversationCache.current[conversationId]
+      setMessages(cached.messages)
+      setCurrentConversationId(conversationId)
+      if (cached.stlUrl) {
+        setCurrentStlUrl(cached.stlUrl)
+        setViewerOpen(true)
+        setActiveModel('cube')
+        setRealSpecs(cached.specs)
+      } else {
+        setCurrentStlUrl(null)
+        setRealSpecs(null)
+      }
+      setChatKey(k => k + 1)
+      return
+    }
     setIsLoadingChat(true)
     try {
       const res = await fetch(`${CONVERSATIONS_API}/${conversationId}/messages`)
@@ -381,6 +398,15 @@ export default function ChatPage() {
       } else {
         setCurrentStlUrl(null)
         setRealSpecs(null)
+      }
+      conversationCache.current[conversationId] = {
+        messages: loaded,
+        stlUrl: lastStlMessage?.stl_url ?? null,
+        specs: lastStlMessage ? {
+          type: lastStlMessage.content?.match(/type:\s*(.+)/i)?.[1]?.trim() ?? '',
+          dimensions: lastStlMessage.content?.match(/dimensions:\s*(.+)/i)?.[1]?.trim() ?? '',
+          material: lastStlMessage.content?.match(/material:\s*(.+)/i)?.[1]?.trim() ?? '',
+        } : null,
       }
       setMessages(loaded)
       setCurrentConversationId(conversationId)
