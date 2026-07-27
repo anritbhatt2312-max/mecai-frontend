@@ -472,6 +472,26 @@ export default function ChatPage() {
       const decoder = new TextDecoder()
       let fullResponse = ''
       let finalData: { has_stl?: boolean; stl_url?: string; step_url?: string; dxf_url?: string; conversation_id?: string } = {}
+      let displayedText = ''
+      let pendingText = ''
+      let typewriterRunning = false
+
+      const typewriterTick = () => {
+        if (abortRef.current) return
+        if (pendingText.length > 0) {
+          const charsToAdd = Math.min(3, pendingText.length)
+          displayedText += pendingText.slice(0, charsToAdd)
+          pendingText = pendingText.slice(charsToAdd)
+          setMessages(prev => {
+            const u = [...prev]
+            u[u.length - 1] = { ...u[u.length - 1], lines: [displayedText], visibleLines: 1 } as AssistantMessage
+            return u
+          })
+          setTimeout(typewriterTick, 12)
+        } else {
+          typewriterRunning = false
+        }
+      }
 
       while (true) {
         const { done, value } = await reader.read()
@@ -484,21 +504,14 @@ export default function ChatPage() {
             const parsed = JSON.parse(line.slice(6))
             if (parsed.type === 'token') {
               fullResponse += parsed.content
-              const displayText = fullResponse
+              const cleanToken = parsed.content
                 .replace(/COMPONENT_REQUEST[\s\S]*?END_COMPONENT_REQUEST/g, '')
                 .replace(/ASSEMBLY_REQUEST[\s\S]*?END_ASSEMBLY_REQUEST/g, '')
-                .trim()
-              setMessages(prev => {
-                const u = [...prev]
-                const last = u[u.length - 1]
-                if (last.lines[0] === displayText) return prev
-                u[u.length - 1] = {
-                  ...last,
-                  lines: [displayText || ''],
-                  visibleLines: 1,
-                } as AssistantMessage
-                return u
-              })
+              pendingText += cleanToken
+              if (!typewriterRunning) {
+                typewriterRunning = true
+                typewriterTick()
+              }
             } else if (parsed.type === 'conversation_id') {
               if (parsed.content) {
                 setCurrentConversationId(parsed.content)
@@ -513,6 +526,17 @@ export default function ChatPage() {
             }
           } catch {}
         }
+      }
+
+      // Flush remaining pending text instantly
+      if (pendingText.length > 0) {
+        displayedText += pendingText
+        pendingText = ''
+        setMessages(prev => {
+          const u = [...prev]
+          u[u.length - 1] = { ...u[u.length - 1], lines: [displayedText], visibleLines: 1 } as AssistantMessage
+          return u
+        })
       }
 
       const cadUrls: CadUrls = {
