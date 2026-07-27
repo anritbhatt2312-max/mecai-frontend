@@ -456,7 +456,7 @@ export default function ChatPage() {
     setMessages(prev => [...prev, { role: 'assistant', lines: [], visibleLines: 0 } as AssistantMessage])
 
     try {
-      const response = await fetch(CHAT_API, {
+      const streamResponse = await fetch('https://web-production-9f493.up.railway.app/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -466,40 +466,68 @@ export default function ChatPage() {
         }),
       })
 
-      if (!response.ok) throw new Error(`Server error: ${response.status}`)
+      if (!streamResponse.ok) throw new Error(`Server error: ${streamResponse.status}`)
 
-      const data = await response.json()
+      const reader = streamResponse.body!.getReader()
+      const decoder = new TextDecoder()
+      let fullResponse = ''
+      let finalData: { has_stl?: boolean; stl_url?: string; step_url?: string; dxf_url?: string; conversation_id?: string } = {}
 
-      if (data.conversation_id) {
-        setCurrentConversationId(data.conversation_id)
-        setConversations(prev => {
-          const exists = prev.find(c => c.id === data.conversation_id)
-          if (exists) return prev
-          return [{ id: data.conversation_id, title: trimmed.slice(0, 50), time: 'Just now' }, ...prev]
-        })
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done || abortRef.current) break
+        const chunk = decoder.decode(value)
+        const lines = chunk.split('\n')
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          try {
+            const parsed = JSON.parse(line.slice(6))
+            if (parsed.type === 'token') {
+              fullResponse += parsed.content
+              const cleanedSoFar = fullResponse
+                .replace(/COMPONENT_REQUEST[\s\S]*?END_COMPONENT_REQUEST/g, '')
+                .replace(/ASSEMBLY_REQUEST[\s\S]*?END_ASSEMBLY_REQUEST/g, '')
+                .trim()
+              setMessages(prev => {
+                const u = [...prev]
+                u[u.length - 1] = {
+                  role: 'assistant',
+                  lines: [cleanedSoFar || ''],
+                  visibleLines: 1,
+                } as AssistantMessage
+                return u
+              })
+            } else if (parsed.type === 'conversation_id') {
+              if (parsed.content) {
+                setCurrentConversationId(parsed.content)
+                setConversations(prev => {
+                  const exists = prev.find(c => c.id === parsed.content)
+                  if (exists) return prev
+                  return [{ id: parsed.content, title: trimmed.slice(0, 50), time: 'Just now' }, ...prev]
+                })
+              }
+            } else if (parsed.type === 'done') {
+              finalData = parsed
+            }
+          } catch {}
+        }
       }
-
-      const cleanedResponse = (data.response ?? "").replace(/COMPONENT_REQUEST[\s\S]*?END_COMPONENT_REQUEST/g, "").replace(/ASSEMBLY_REQUEST[\s\S]*?END_ASSEMBLY_REQUEST/g, "").trim()
-      const lines = splitLines(cleanedResponse || "No response received.")
 
       const cadUrls: CadUrls = {
-        stl_url:  data.stl_url  ?? null,
-        step_url: data.step_url ?? null,
-        dxf_url:  data.dxf_url  ?? null,
+        stl_url: finalData.stl_url ?? null,
+        step_url: finalData.step_url ?? null,
+        dxf_url: finalData.dxf_url ?? null,
       }
 
-      if (data.has_stl) {
+      if (finalData.has_stl) {
         setCurrentCadUrls(cadUrls)
-      }
-
-      if (data.has_stl) {
         setViewerOpen(true)
         setIsGenerating(true)
         setActiveModel('empty')
-        setCurrentStlUrl(data.stl_url ?? null)
-        const specMatch = data.response.match(/type:\s*(.+)/i)
-        const dimsMatch = data.response.match(/dimensions:\s*(.+)/i)
-        const materialMatch = data.response.match(/material:\s*(.+)/i)
+        setCurrentStlUrl(finalData.stl_url ?? null)
+        const specMatch = fullResponse.match(/type:\s*(.+)/i)
+        const dimsMatch = fullResponse.match(/dimensions:\s*(.+)/i)
+        const materialMatch = fullResponse.match(/material:\s*(.+)/i)
         setRealSpecs({
           type: specMatch ? specMatch[1].trim() : '',
           dimensions: dimsMatch ? dimsMatch[1].trim() : '',
@@ -507,7 +535,7 @@ export default function ChatPage() {
         })
         setTimeout(() => {
           setIsGenerating(false)
-          const tl = (data.response ?? '').toLowerCase()
+          const tl = fullResponse.toLowerCase()
           let inferred: ModelType = 'cube'
           if (tl.includes('spur gear'))                           inferred = 'spur_gear'
           else if (tl.includes('helical'))                        inferred = 'helical_gear'
@@ -519,27 +547,9 @@ export default function ChatPage() {
           else if (tl.includes('rectangle') || tl.includes('box')) inferred = 'rectangle'
           setActiveModel(inferred)
         }, 2800)
-      }
-
-      setMessages(prev => {
-        const u = [...prev]
-        u[u.length - 1] = {
-          role: 'assistant',
-          lines,
-          visibleLines: 0,
-          ...(data.has_stl ? { cadUrls } : {}),
-        } as AssistantMessage
-        return u
-      })
-
-      for (let i = 0; i < lines.length; i++) {
-        if (abortRef.current) break
-        await new Promise(r => setTimeout(r, i === 0 ? 280 : 380))
         setMessages(prev => {
           const u = [...prev]
-          const l = { ...u[u.length - 1] }
-          l.visibleLines = i + 1
-          u[u.length - 1] = l
+          u[u.length - 1] = { ...u[u.length - 1], cadUrls } as AssistantMessage
           return u
         })
       }
