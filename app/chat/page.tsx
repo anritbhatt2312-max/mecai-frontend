@@ -487,7 +487,7 @@ export default function ChatPage() {
             u[u.length - 1] = { ...u[u.length - 1], lines: [displayedText], visibleLines: 1 } as AssistantMessage
             return u
           })
-          setTimeout(typewriterTick, 12)
+          setTimeout(typewriterTick, 5)
         } else {
           typewriterRunning = false
         }
@@ -504,10 +504,16 @@ export default function ChatPage() {
             const parsed = JSON.parse(line.slice(6))
             if (parsed.type === 'token') {
               fullResponse += parsed.content
-              const cleanToken = parsed.content
-                .replace(/COMPONENT_REQUEST[\s\S]*?END_COMPONENT_REQUEST/g, '')
-                .replace(/ASSEMBLY_REQUEST[\s\S]*?END_ASSEMBLY_REQUEST/g, '')
-              pendingText += cleanToken
+              const inBlock = fullResponse.includes('COMPONENT_REQUEST') && !fullResponse.includes('END_COMPONENT_REQUEST')
+              const inAssemblyBlock = fullResponse.includes('ASSEMBLY_REQUEST') && !fullResponse.includes('END_ASSEMBLY_REQUEST')
+              if (!inBlock && !inAssemblyBlock) {
+                const cleanedSoFar = fullResponse
+                  .replace(/COMPONENT_REQUEST[\s\S]*?END_COMPONENT_REQUEST/g, '')
+                  .replace(/ASSEMBLY_REQUEST[\s\S]*?END_ASSEMBLY_REQUEST/g, '')
+                  .trim()
+                const newChars = cleanedSoFar.slice(displayedText.length + pendingText.length)
+                pendingText += newChars
+              }
               if (!typewriterRunning) {
                 typewriterRunning = true
                 typewriterTick()
