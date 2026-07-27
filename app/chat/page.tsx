@@ -484,15 +484,17 @@ export default function ChatPage() {
             const parsed = JSON.parse(line.slice(6))
             if (parsed.type === 'token') {
               fullResponse += parsed.content
-              const cleanedSoFar = fullResponse
+              const displayText = fullResponse
                 .replace(/COMPONENT_REQUEST[\s\S]*?END_COMPONENT_REQUEST/g, '')
                 .replace(/ASSEMBLY_REQUEST[\s\S]*?END_ASSEMBLY_REQUEST/g, '')
                 .trim()
               setMessages(prev => {
                 const u = [...prev]
+                const last = u[u.length - 1]
+                if (last.lines[0] === displayText) return prev
                 u[u.length - 1] = {
-                  role: 'assistant',
-                  lines: [cleanedSoFar || ''],
+                  ...last,
+                  lines: [displayText || ''],
                   visibleLines: 1,
                 } as AssistantMessage
                 return u
