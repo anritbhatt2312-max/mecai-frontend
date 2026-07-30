@@ -26,9 +26,9 @@ export default function LoginTransition({ userName, onComplete }: Props) {
   }, [userName])
 
   useEffect(() => {
-    const t1 = setTimeout(() => setPhase('hold'), 700)
-    const t2 = setTimeout(() => setPhase('exit'), 2800)
-    const t3 = setTimeout(() => onComplete(), 3300)
+    const t1 = setTimeout(() => setPhase('hold'), 300)
+    const t2 = setTimeout(() => setPhase('exit'), 1100)
+    const t3 = setTimeout(() => onComplete(), 1500)
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3) }
   }, [onComplete])
 
