@@ -23,6 +23,7 @@ interface Props {
   textMuted: string
   border: string
   bg: string
+  onSelectProject: (project: Project) => void
 }
 
 function timeAgo(dateStr: string): string {
@@ -36,7 +37,7 @@ function timeAgo(dateStr: string): string {
   return days + 'd ago'
 }
 
-export default function ProjectsPage({ darkMode, textPrimary, textMuted, border, bg }: Props) {
+export default function ProjectsPage({ darkMode, textPrimary, textMuted, border, bg, onSelectProject }: Props) {
   const { data: session } = useSession()
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
@@ -157,7 +158,7 @@ export default function ProjectsPage({ darkMode, textPrimary, textMuted, border,
         {projects.length > 0 && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
             {projects.map(project => (
-              <div key={project.id} style={{ background: card, border: '1px solid ' + border, borderRadius: 12, padding: '20px 20px 16px', display: 'flex', flexDirection: 'column', gap: 12, transition: 'background 0.15s' }}
+              <div key={project.id} onClick={() => onSelectProject(project)} style={{ background: card, border: '1px solid ' + border, borderRadius: 12, padding: '20px 20px 16px', display: 'flex', flexDirection: 'column', gap: 12, transition: 'background 0.15s', cursor: 'pointer' }}
                 onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = cardH}
                 onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = card}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

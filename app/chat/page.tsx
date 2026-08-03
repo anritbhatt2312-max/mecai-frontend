@@ -5,6 +5,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import LoginTransition from '@/components/LoginTransition'
 import ProjectsPage from '@/components/ProjectsPage'
+import ProjectView from '@/components/ProjectView'
 import { useSmartSuggestions, trackMessage } from '@/hooks/useSmartSuggestions'
 import { ArrowUp, X, Search, StopCircle, Download } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
@@ -254,6 +255,8 @@ export default function ChatPage() {
   const [chatKey, setChatKey] = useState(0)
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null)
   const [isLoadingChat, setIsLoadingChat] = useState(false)
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null)
+  const [selectedProject, setSelectedProject] = useState<{ id: string; name: string; owner_id: string; share_token: string; link_permission: string } | null>(null)
   const conversationCache = useRef<Record<string, { messages: ChatMessage[]; stlUrl: string | null; specs: { type: string; dimensions: string; material: string } | null }>>({})
   const [exportMenuOpen, setExportMenuOpen] = useState(false)
   const [conversations, setConversations] = useState<{ id: string; title: string; time: string }[]>([])
@@ -463,6 +466,7 @@ export default function ChatPage() {
           messages: [{ role: 'user', content: trimmed }],
           user_id: session?.user?.id ?? 'anonymous',
           conversation_id: currentConversationId,
+          project_id: currentProjectId,
         }),
       })
 
@@ -915,8 +919,28 @@ export default function ChatPage() {
           </div>
         )}
 
-        {page === 'projects' && (
-          <ProjectsPage darkMode={dm} textPrimary={textPrimary} textMuted={textMuted} border={border} bg={bg} />
+        {page === 'projects' && !selectedProject && (
+          <ProjectsPage
+            darkMode={dm} textPrimary={textPrimary} textMuted={textMuted} border={border} bg={bg}
+            onSelectProject={(project) => setSelectedProject(project)}
+          />
+        )}
+        {page === 'projects' && selectedProject && (
+          <ProjectView
+            project={selectedProject}
+            darkMode={dm} textPrimary={textPrimary} textMuted={textMuted} border={border} bg={bg}
+            onBack={() => setSelectedProject(null)}
+            onSelectChat={(conversationId) => {
+              setPage('home')
+              setSelectedProject(null)
+              loadConversation(conversationId)
+            }}
+            onNewChat={(projectId) => {
+              setPage('home')
+              setSelectedProject(null)
+              setCurrentProjectId(projectId)
+            }}
+          />
         )}
       </main>
     {exportMenuOpen && currentCadUrls && (
