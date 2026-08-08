@@ -147,17 +147,17 @@ interface InputBarProps {
 }
 
 function InputBar({ input, onChange, onKeyDown, onSend, onStop, isStreaming, placeholder, disclaimer, textPrimary, textMuted, darkMode, textareaRef, attachments, onAttach, onRemoveAttachment }: InputBarProps) {
-  const fileInputRef = React.useRef(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  async function handleFiles(files) {
+  async function handleFiles(files: FileList | null) {
     if (!files) return
     const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf']
-    const newAttachments = []
-    for (const file of Array.from(files)) {
+    const newAttachments: { file: File; base64: string; mediaType: string }[] = []
+    for (const file of Array.from(files) as File[]) {
       if (!allowed.includes(file.type)) continue
-      const base64 = await new Promise((resolve) => {
+      const base64 = await new Promise<string>((resolve) => {
         const reader = new FileReader()
-        reader.onload = () => resolve(reader.result.split(',')[1])
+        reader.onload = () => resolve((reader.result as string).split(',')[1])
         reader.readAsDataURL(file)
       })
       newAttachments.push({ file, base64, mediaType: file.type })
