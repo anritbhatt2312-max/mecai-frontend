@@ -7,7 +7,7 @@ import LoginTransition from '@/components/LoginTransition'
 import ProjectsPage from '@/components/ProjectsPage'
 import ProjectView from '@/components/ProjectView'
 import { useSmartSuggestions, trackMessage } from '@/hooks/useSmartSuggestions'
-import { ArrowUp, X, Search, StopCircle, Download } from 'lucide-react'
+import { ArrowUp, X, Search, StopCircle, Download, Paperclip } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import ModelViewer, { ModelType, ShapeDimensions } from '@/components/viewer/ModelViewer'
 import Sidebar, { SIDEBAR_EXPANDED, SIDEBAR_COLLAPSED, ThemePreference } from '@/components/sidebar/Sidebar'
@@ -141,9 +141,32 @@ interface InputBarProps {
   textMuted: string
   darkMode: boolean
   textareaRef: React.RefObject<HTMLTextAreaElement | null>
+  attachments: { file: File; base64: string; mediaType: string }[]
+  onAttach: (files: { file: File; base64: string; mediaType: string }[]) => void
+  onRemoveAttachment: (index: number) => void
 }
 
-function InputBar({ input, onChange, onKeyDown, onSend, onStop, isStreaming, placeholder, disclaimer, textPrimary, textMuted, darkMode, textareaRef }: InputBarProps) {
+function InputBar({ input, onChange, onKeyDown, onSend, onStop, isStreaming, placeholder, disclaimer, textPrimary, textMuted, darkMode, textareaRef, attachments, onAttach, onRemoveAttachment }: InputBarProps) {
+  const fileInputRef = React.useRef(null)
+
+  async function handleFiles(files) {
+    if (!files) return
+    const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf']
+    const newAttachments = []
+    for (const file of Array.from(files)) {
+      if (!allowed.includes(file.type)) continue
+      const base64 = await new Promise((resolve) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result.split(',')[1])
+        reader.readAsDataURL(file)
+      })
+      newAttachments.push({ file, base64, mediaType: file.type })
+    }
+    onAttach([...attachments, ...newAttachments])
+  }
+
+  const canSend = input.trim().length > 0 || attachments.length > 0
+
   return (
     <div style={{ width: '100%' }}>
       <div style={{
@@ -168,8 +191,8 @@ function InputBar({ input, onChange, onKeyDown, onSend, onStop, isStreaming, pla
             <StopCircle size={13} color="white" />
           </button>
         ) : (
-          <button onClick={onSend} disabled={!input.trim()} style={{ width: '30px', height: '30px', borderRadius: '8px', flexShrink: 0, backgroundColor: input.trim() ? '#0a1628' : (darkMode ? '#2a2f35' : '#d8d8d8'), border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: input.trim() ? 'pointer' : 'not-allowed', transition: 'background-color 0.2s' }}>
-            <ArrowUp size={13} color={input.trim() ? 'white' : (darkMode ? '#4a5568' : '#aaa')} />
+          <button onClick={onSend} disabled={!canSend} style={{ width: '30px', height: '30px', borderRadius: '8px', flexShrink: 0, backgroundColor: canSend ? '#0a1628' : (darkMode ? '#2a2f35' : '#d8d8d8'), border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: canSend ? 'pointer' : 'not-allowed', transition: 'background-color 0.2s' }}>
+            <ArrowUp size={13} color={canSend ? 'white' : (darkMode ? '#4a5568' : '#aaa')} />
           </button>
         )}
       </div>
@@ -255,6 +278,7 @@ export default function ChatPage() {
   const [chatKey, setChatKey] = useState(0)
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null)
   const [isLoadingChat, setIsLoadingChat] = useState(false)
+  const [attachments, setAttachments] = useState<{ file: File; base64: string; mediaType: string }[]>([])
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null)
   const [selectedProject, setSelectedProject] = useState<{ id: string; name: string; owner_id: string; share_token: string; link_permission: string } | null>(null)
   const conversationCache = useRef<Record<string, { messages: ChatMessage[]; stlUrl: string | null; specs: { type: string; dimensions: string; material: string } | null }>>({})
@@ -449,6 +473,7 @@ export default function ChatPage() {
     const trimmed = text.trim()
     if (!trimmed || isStreaming) return
     setInput('')
+    setAttachments([])
 
     setMessages(prev => [...prev, { role: 'user', lines: [trimmed], visibleLines: 1 }])
     setIsStreaming(true)
@@ -467,6 +492,7 @@ export default function ChatPage() {
           user_id: session?.user?.id ?? 'anonymous',
           conversation_id: currentConversationId,
           project_id: currentProjectId,
+          attachments: attachments.map(a => ({ base64: a.base64, mediaType: a.mediaType, name: a.file.name })),
         }),
       })
 
@@ -653,6 +679,9 @@ export default function ChatPage() {
     isStreaming, surface, border, textPrimary, textMuted,
     darkMode: dm, textareaRef, placeholder: '',
     disclaimer: t('disclaimer'),
+    attachments,
+    onAttach: setAttachments,
+    onRemoveAttachment: (i: number) => setAttachments(prev => prev.filter((_, idx) => idx !== i)),
   }
 
   function greeting() {
