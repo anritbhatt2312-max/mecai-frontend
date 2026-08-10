@@ -5,7 +5,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls, GizmoHelper, GizmoViewport } from '@react-three/drei'
 import * as THREE from 'three'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
-import { X, Save, Download, RotateCcw, ZoomIn, ZoomOut, Box, Grid3x3, Play, Square } from 'lucide-react'
+import { X, Save, Download, RotateCcw, ZoomIn, ZoomOut, Box, Grid3x3, Play, Square, Activity } from 'lucide-react'
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
 import { useLoader } from '@react-three/fiber'
 
@@ -783,6 +783,34 @@ function ToolBtn({ icon, label, active, onClick }: { icon: React.ReactNode; labe
 export default function ModelViewer({ onClose, modelType = 'empty', pendingModel = 'empty', isGenerating = false, shapeDims = {}, heatmap: heatmapProp, onHeatmapToggle, cadUrls = null, stlUrl = null, realSpecs = null }: ModelViewerProps) {
   const [wireframe, setWireframe]     = useState(false)
   const [heatmap, setHeatmap]         = useState(false)
+  const [feaRunning, setFeaRunning]   = useState(false)
+  const [feaResults, setFeaResults]   = useState<{ max_stress_mpa: number; min_stress_mpa: number } | null>(null)
+
+  async function runFEA() {
+    if (!cadUrls?.step_url || feaRunning) return
+    setFeaRunning(true)
+    try {
+      const res = await fetch('https://web-production-9f493.up.railway.app/fea/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          step_url: cadUrls.step_url,
+          material: realSpecs?.material ?? 'steel',
+          load_magnitude: 1000,
+          load_direction: 'z',
+        })
+      })
+      const data = await res.json()
+      if (data.max_stress_mpa) {
+        setFeaResults(data)
+        setHeatmap(true)
+        if (onHeatmapToggle) onHeatmapToggle()
+      }
+    } catch (e) {
+      console.error('FEA failed:', e)
+    }
+    setFeaRunning(false)
+  }
   useEffect(() => { if (heatmapProp !== undefined) setHeatmap(heatmapProp) }, [heatmapProp])
 
   const [gridVisible, setGrid]        = useState(true)
@@ -937,6 +965,7 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
           <ToolBtn icon={<ZoomOut size={12} />}   label="Zoom out"    onClick={() => setZoomDelta(-1.5)} />
           <ToolBtn icon={<Box size={12} />}       label="Wireframe"   active={wireframe}   onClick={() => setWireframe(w => !w)} />
           <ToolBtn icon={<Grid3x3 size={12} />}   label="Toggle grid" active={gridVisible} onClick={() => setGrid(g => !g)} />
+          <ToolBtn icon={feaRunning ? <span style={{ fontSize: '8px', fontWeight: 700 }}>...</span> : <Activity size={12} />} label={cadUrls?.step_url ? 'Run stress analysis' : 'Stress analysis — generate a component first'} active={heatmap && !!feaResults} onClick={runFEA} />
         </div>
 
         <button onClick={onClose}
@@ -972,6 +1001,28 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
         {show2D && (
           <div style={{ position: 'absolute', top: '12px', right: '12px', zIndex: 5, backgroundColor: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.25)', borderRadius: '99px', padding: '4px 10px' }}>
             <span style={{ fontSize: '9px', fontWeight: 600, color: '#ffffff', fontFamily: F, letterSpacing: '0.1em', textTransform: 'uppercase' }}>2D Drawing</span>
+          </div>
+        )}
+        {feaResults && heatmap && (
+          <div style={{ position: 'absolute', bottom: '16px', left: '16px', zIndex: 5, backgroundColor: 'rgba(8,14,26,0.85)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', padding: '12px 14px', backdropFilter: 'blur(8px)', minWidth: '160px' }}>
+            <p style={{ margin: '0 0 8px', fontSize: '9px', fontWeight: 600, color: '#63b3ed', fontFamily: F, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Von Mises Stress</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                <div style={{ width: 12, height: 12, borderRadius: 2, background: '#ef4444' }} />
+                <span style={{ fontSize: '10px', color: '#e2e8f0', fontFamily: F }}>{feaResults.max_stress_mpa.toFixed(1)} MPa</span>
+              </div>
+              <div style={{ width: '100%', height: 8, borderRadius: 4, background: 'linear-gradient(to right, #3b82f6, #10b981, #f59e0b, #ef4444)' }} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                <div style={{ width: 12, height: 12, borderRadius: 2, background: '#3b82f6' }} />
+                <span style={{ fontSize: '10px', color: '#e2e8f0', fontFamily: F }}>{feaResults.min_stress_mpa.toFixed(1)} MPa</span>
+              </div>
+            </div>
+          </div>
+        )}
+        {feaRunning && (
+          <div style={{ position: 'absolute', bottom: '16px', left: '16px', zIndex: 5, backgroundColor: 'rgba(8,14,26,0.85)', border: '1px solid rgba(99,179,237,0.2)', borderRadius: '10px', padding: '12px 14px', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 16, height: 16, borderRadius: '50%', border: '2px solid rgba(99,179,237,0.2)', borderTopColor: '#63b3ed', animation: 'mvSpin 0.9s linear infinite' }} />
+            <span style={{ fontSize: '10px', color: '#63b3ed', fontFamily: F }}>Running FEA analysis...</span>
           </div>
         )}
 
