@@ -835,7 +835,7 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
       })
       const data = await res.json()
       if (data.max_stress_mpa) {
-        setFeaResults(data)
+        setFeaResults({ max_stress_mpa: data.max_stress_mpa, min_stress_mpa: data.min_stress_mpa, node_stress_map: data.node_stress_map })
         setHeatmap(true)
         if (onHeatmapToggle) onHeatmapToggle()
       }
