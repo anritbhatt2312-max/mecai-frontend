@@ -30,13 +30,22 @@ function matProps(material: string) {
   }
 }
 
-function RealSTLModel({ url, ar, wireframe }: { url: string; ar: boolean; wireframe: boolean }) {
+function stressToColor(stress: number): THREE.Color {
+  const c = new THREE.Color()
+  if (stress < 0.25) c.setRGB(0, stress * 4, 1)
+  else if (stress < 0.5) c.setRGB(0, 1, 1 - (stress - 0.25) * 4)
+  else if (stress < 0.75) c.setRGB((stress - 0.5) * 4, 1, 0)
+  else c.setRGB(1, 1 - (stress - 0.75) * 4, 0)
+  return c
+}
+
+function RealSTLModel({ url, ar, wireframe, nodeStressMap }: { url: string; ar: boolean; wireframe: boolean; nodeStressMap?: { x: number; y: number; z: number; stress: number }[] }) {
   const geometry = useLoader(STLLoader, url)
   const ref = useRef<THREE.Mesh>(null)
 
   useFrame((_, d) => { if (ref.current && ar) ref.current.rotation.y += d * 0.5 })
 
-  const mat = useMemo(() => new THREE.MeshStandardMaterial({ ...matProps('steel') }), [])
+  const mat = useMemo(() => new THREE.MeshStandardMaterial({ ...matProps('steel'), vertexColors: !!nodeStressMap }), [nodeStressMap])
   useEffect(() => { mat.wireframe = wireframe; mat.needsUpdate = true }, [mat, wireframe])
 
   const centeredGeometry = useMemo(() => {
@@ -53,8 +62,32 @@ function RealSTLModel({ url, ar, wireframe }: { url: string; ar: boolean; wirefr
     const scale = maxDim > 0 ? 3.0 / maxDim : 1
     geo.scale(scale, scale, scale)
 
+    // Apply vertex colors from FEA stress map
+    if (nodeStressMap && nodeStressMap.length > 0) {
+      const positions = geo.attributes.position
+      const colors = new Float32Array(positions.count * 3)
+      const tempVec = new THREE.Vector3()
+      for (let i = 0; i < positions.count; i++) {
+        tempVec.fromBufferAttribute(positions, i)
+        let minDist = Infinity
+        let nearestStress = 0.5
+        for (const node of nodeStressMap) {
+          const dx = tempVec.x - node.x * scale
+          const dy = tempVec.y - node.y * scale
+          const dz = tempVec.z - node.z * scale
+          const dist = dx*dx + dy*dy + dz*dz
+          if (dist < minDist) { minDist = dist; nearestStress = node.stress }
+        }
+        const col = stressToColor(nearestStress)
+        colors[i * 3] = col.r
+        colors[i * 3 + 1] = col.g
+        colors[i * 3 + 2] = col.b
+      }
+      geo.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+    }
+
     return geo
-  }, [geometry])
+  }, [geometry, nodeStressMap])
 
   return <mesh ref={ref} geometry={centeredGeometry} material={mat} />
 }
@@ -784,7 +817,7 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
   const [wireframe, setWireframe]     = useState(false)
   const [heatmap, setHeatmap]         = useState(false)
   const [feaRunning, setFeaRunning]   = useState(false)
-  const [feaResults, setFeaResults]   = useState<{ max_stress_mpa: number; min_stress_mpa: number } | null>(null)
+  const [feaResults, setFeaResults]   = useState<{ max_stress_mpa: number; min_stress_mpa: number; node_stress_map?: { x: number; y: number; z: number; stress: number }[] } | null>(null)
 
   async function runFEA() {
     if (!cadUrls?.step_url || feaRunning) return
@@ -1055,7 +1088,7 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
               <pointLight       position={[-4, 2, 2]}   intensity={0.9} color="#c8dcff" />
               <InfiniteGrid visible={gridVisible} />
               {hasRealStl ? (
-                <RealSTLModel url={stlUrl!} ar={autoRotate} wireframe={wireframe} />
+                <RealSTLModel url={stlUrl!} ar={autoRotate} wireframe={wireframe} nodeStressMap={heatmap && feaResults?.node_stress_map ? feaResults.node_stress_map : undefined} />
               ) : (
                 <>
                   {modelType === 'spur_gear'    && <SpurGearModel    ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
