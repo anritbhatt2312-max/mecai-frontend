@@ -534,12 +534,14 @@ export default function ChatPage() {
             const parsed = JSON.parse(line.slice(6))
             if (parsed.type === 'token') {
               fullResponse += parsed.content
-              const inBlock = fullResponse.includes('COMPONENT_REQUEST') && !fullResponse.includes('END_COMPONENT_REQUEST')
+              const inBlock = (fullResponse.includes('COMPONENT_REQUEST') && !fullResponse.includes('END_COMPONENT_REQUEST')) ||
+                              (fullResponse.includes('CADQUERY_CODE_START') && !fullResponse.includes('CADQUERY_CODE_END'))
               const inAssemblyBlock = fullResponse.includes('ASSEMBLY_REQUEST') && !fullResponse.includes('END_ASSEMBLY_REQUEST')
               if (!inBlock && !inAssemblyBlock) {
                 const cleanedSoFar = fullResponse
                   .replace(/COMPONENT_REQUEST[\s\S]*?END_COMPONENT_REQUEST/g, '')
                   .replace(/ASSEMBLY_REQUEST[\s\S]*?END_ASSEMBLY_REQUEST/g, '')
+                  .replace(/CADQUERY_CODE_START[\s\S]*?CADQUERY_CODE_END/g, '')
                   .trim()
                 const newChars = cleanedSoFar.slice(displayedText.length + pendingText.length)
                 pendingText += newChars
