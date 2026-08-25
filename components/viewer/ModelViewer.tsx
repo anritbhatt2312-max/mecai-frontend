@@ -849,6 +849,33 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
   const [gridVisible, setGrid]        = useState(true)
   const [autoRotate, setAutoRotate]   = useState(false)
   const [show2D, setShow2D]           = useState(false)
+  const [drawingSvg, setDrawingSvg]   = useState<string | null>(null)
+  const [drawingLoading, setDrawingLoading] = useState(false)
+
+  async function fetchDrawing() {
+    if (!cadUrls?.step_url) return
+    setShow2D(true)
+    if (drawingSvg) return // already loaded
+    setDrawingLoading(true)
+    try {
+      const res = await fetch('https://web-production-9f493.up.railway.app/fea/drawing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          step_url: cadUrls.step_url,
+          component_name: realSpecs?.type ?? 'Component',
+          material: realSpecs?.material ?? 'Steel'
+        })
+      })
+      if (res.ok) {
+        const svg = await res.text()
+        setDrawingSvg(svg)
+      }
+    } catch (e) {
+      console.error('Drawing fetch failed:', e)
+    }
+    setDrawingLoading(false)
+  }
   const [zoomDelta, setZoomDelta]     = useState(0)
   const [dots, setDots]               = useState('.')
   const [toastMessage, setToastMessage] = useState<string | null>(null)
@@ -999,6 +1026,7 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
           <ToolBtn icon={<Box size={12} />}       label="Wireframe"   active={wireframe}   onClick={() => setWireframe(w => !w)} />
           <ToolBtn icon={<Grid3x3 size={12} />}   label="Toggle grid" active={gridVisible} onClick={() => setGrid(g => !g)} />
           <ToolBtn icon={feaRunning ? <span style={{ fontSize: '8px', fontWeight: 700 }}>...</span> : <Activity size={12} />} label={cadUrls?.step_url ? 'Run stress analysis' : 'Stress analysis — generate a component first'} active={heatmap && !!feaResults} onClick={runFEA} />
+          <ToolBtn icon={<span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '-0.01em', lineHeight: 1 }}>2D</span>} label={cadUrls?.step_url ? 'Engineering drawing' : 'Engineering drawing — generate a component first'} active={show2D} onClick={() => cadUrls?.step_url ? fetchDrawing() : null} />
         </div>
 
         <button onClick={onClose}
@@ -1059,7 +1087,20 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
           </div>
         )}
 
-        {show2D && (modelType !== 'empty' || pendingModel !== 'empty') && (
+        {show2D && drawingLoading && (
+          <div style={{ position: 'absolute', inset: 0, zIndex: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(8,14,26,0.85)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 32, height: 32, borderRadius: '50%', border: '2px solid rgba(99,179,237,0.2)', borderTopColor: '#63b3ed', animation: 'mvSpin 0.9s linear infinite' }} />
+              <span style={{ fontSize: '11px', color: '#63b3ed', fontFamily: F }}>Generating engineering drawing...</span>
+            </div>
+          </div>
+        )}
+        {show2D && drawingSvg && !drawingLoading && (
+          <div style={{ position: 'absolute', inset: 0, zIndex: 6, background: 'white', overflow: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div dangerouslySetInnerHTML={{ __html: drawingSvg }} style={{ width: '100%', height: '100%' }} />
+          </div>
+        )}
+        {show2D && !drawingSvg && !drawingLoading && (modelType !== 'empty' || pendingModel !== 'empty') && (
           <div style={{ position: 'absolute', inset: 0, zIndex: 6, transition: 'opacity 0.4s ease', opacity: 1 }}>
             <Drawing2D
               modelType={pendingModel !== 'empty' ? pendingModel : modelType}
