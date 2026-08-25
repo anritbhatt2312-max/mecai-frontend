@@ -402,7 +402,7 @@ export default function ChatPage() {
       if (!Array.isArray(data.messages)) return
       const loaded: ChatMessage[] = data.messages.map((m: { role: string; content: string; has_stl?: boolean; stl_url?: string }) => {
         const content = m.role === 'assistant'
-          ? (m.content ?? '').replace(/COMPONENT_REQUEST[\s\S]*?END_COMPONENT_REQUEST/g, '').replace(/ASSEMBLY_REQUEST[\s\S]*?END_ASSEMBLY_REQUEST/g, '').trim()
+          ? (m.content ?? '').replace(/COMPONENT_REQUEST[\s\S]*?END_COMPONENT_REQUEST/g, '').replace(/ASSEMBLY_REQUEST[\s\S]*?END_ASSEMBLY_REQUEST/g, '').replace(/CADQUERY_CODE_START[\s\S]*?CADQUERY_CODE_END/g, '').trim()
           : m.content
         return {
           role: m.role as 'user' | 'assistant',
