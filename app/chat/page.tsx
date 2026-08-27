@@ -590,12 +590,13 @@ export default function ChatPage() {
         setActiveModel('empty')
         setCurrentStlUrl(finalData.stl_url ?? null)
         const specMatch = fullResponse.match(/type:\s*(.+)/i)
-        const dimsMatch = fullResponse.match(/dimensions:\s*(.+)/i)
-        const materialMatch = fullResponse.match(/material:\s*(.+)/i)
+        const dimsMatch = fullResponse.match(/dimensions?:\s*(.+)/i) || fullResponse.match(/side_length\s*=\s*([\d.]+)/i)
+        const materialMatch = fullResponse.match(/material(?:\s+recommendation)?[:\s]+([A-Za-z0-9\s\-]+)/i)
+        const componentMatch = fullResponse.match(/(?:generating?|create?|design)\s+(?:a\s+)?([\w\s]+?)(?:\s+with|\s+using|\s*[-—]|\.|,|\n)/i)
         setRealSpecs({
-          type: specMatch ? specMatch[1].trim() : '',
-          dimensions: dimsMatch ? dimsMatch[1].trim() : '',
-          material: materialMatch ? materialMatch[1].trim() : '',
+          type: specMatch ? specMatch[1].trim() : (componentMatch ? componentMatch[1].trim() : 'Component'),
+          dimensions: dimsMatch ? (dimsMatch[1] || dimsMatch[0]).trim() : '',
+          material: materialMatch ? materialMatch[1].trim().split('\n')[0].trim() : 'Steel',
         })
         setTimeout(() => {
           setIsGenerating(false)
