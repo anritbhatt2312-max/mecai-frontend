@@ -411,9 +411,10 @@ export default function ChatPage() {
           visibleLines: m.role === 'assistant' ? splitLines(content).length : 1,
         }
       })
-      const lastStlMessage = [...data.messages].reverse().find((m: { has_stl?: boolean; stl_url?: string }) => m.has_stl && m.stl_url)
+      const lastStlMessage = [...data.messages].reverse().find((m: { has_stl?: boolean; stl_url?: string; step_url?: string }) => m.has_stl && m.stl_url)
       if (lastStlMessage) {
         setCurrentStlUrl(lastStlMessage.stl_url)
+        setCurrentCadUrls({ stl_url: lastStlMessage.stl_url ?? null, step_url: lastStlMessage.step_url ?? null, dxf_url: null })
         setViewerOpen(true)
         setActiveModel('cube')
         const specMatch = lastStlMessage.content?.match(/type:\s*(.+)/i)
