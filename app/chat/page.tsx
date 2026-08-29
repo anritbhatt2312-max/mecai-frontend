@@ -279,6 +279,7 @@ export default function ChatPage() {
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null)
   const [isLoadingChat, setIsLoadingChat] = useState(false)
   const [attachments, setAttachments] = useState<{ file: File; base64: string; mediaType: string }[]>([])
+  const [designAnalysis, setDesignAnalysis] = useState<{ warnings: { level: string; category: string; message: string }[]; overall_score: number | null; summary: string } | null>(null)
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null)
   const [selectedProject, setSelectedProject] = useState<{ id: string; name: string; owner_id: string; share_token: string; link_permission: string } | null>(null)
   const conversationCache = useRef<Record<string, { messages: ChatMessage[]; stlUrl: string | null; specs: { type: string; dimensions: string; material: string } | null }>>({})
@@ -474,6 +475,7 @@ export default function ChatPage() {
     if (!trimmed || isStreaming) return
     setInput('')
     setAttachments([])
+    setDesignAnalysis(null)
 
     setMessages(prev => [...prev, { role: 'user', lines: [trimmed], visibleLines: 1 }])
     setIsStreaming(true)
@@ -561,6 +563,9 @@ export default function ChatPage() {
               }
             } else if (parsed.type === 'done') {
               finalData = parsed
+              if (parsed.design_analysis) {
+                setDesignAnalysis(parsed.design_analysis)
+              }
             }
           } catch {}
         }
@@ -902,6 +907,34 @@ export default function ChatPage() {
                 </div>
                 <div style={{ padding: '12px 24px 20px', backgroundColor: bg, flexShrink: 0 }}>
                   <div style={{ maxWidth: '700px', margin: '0 auto' }}>
+                    {designAnalysis && designAnalysis.warnings && designAnalysis.warnings.length > 0 && (
+                      <div style={{ marginBottom: 12, borderRadius: 10, border: `1px solid ${border}`, overflow: 'hidden' }}>
+                        <div style={{ padding: '8px 14px', background: dm ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: textMuted, fontFamily: F, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Design Analysis</span>
+                          {designAnalysis.overall_score && (
+                            <span style={{ fontSize: 11, fontWeight: 600, color: designAnalysis.overall_score >= 8 ? '#10b981' : designAnalysis.overall_score >= 5 ? '#f59e0b' : '#ef4444', fontFamily: F }}>
+                              Score: {designAnalysis.overall_score}/10
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ padding: '8px 14px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {designAnalysis.warnings.map((w, i) => (
+                            <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                              <span style={{ fontSize: 12, flexShrink: 0, marginTop: 1 }}>
+                                {w.level === 'critical' ? '🔴' : w.level === 'warning' ? '🟡' : '🟢'}
+                              </span>
+                              <div>
+                                <span style={{ fontSize: 10, fontWeight: 600, color: textMuted, fontFamily: F, letterSpacing: '0.06em', textTransform: 'uppercase', marginRight: 6 }}>{w.category}</span>
+                                <span style={{ fontSize: 12, color: textPrimary, fontFamily: F, fontWeight: 300, lineHeight: 1.5 }}>{w.message}</span>
+                              </div>
+                            </div>
+                          ))}
+                          {designAnalysis.summary && (
+                            <p style={{ margin: '6px 0 0', fontSize: 11, color: textMuted, fontFamily: F, fontStyle: 'italic' }}>{designAnalysis.summary}</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
                     <InputBar {...inputBarProps} placeholder="Ask a follow-up..." />
                   </div>
                 </div>
