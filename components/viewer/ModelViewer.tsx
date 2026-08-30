@@ -5,7 +5,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls, GizmoHelper, GizmoViewport } from '@react-three/drei'
 import * as THREE from 'three'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
-import { X, Save, Download, RotateCcw, ZoomIn, ZoomOut, Box, Grid3x3, Play, Square } from 'lucide-react'
+import { X, Save, Download, RotateCcw, ZoomIn, ZoomOut, Box, Grid3x3, Play, Square, Activity } from 'lucide-react'
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
 import { useLoader } from '@react-three/fiber'
 
@@ -30,13 +30,22 @@ function matProps(material: string) {
   }
 }
 
-function RealSTLModel({ url, ar, wireframe }: { url: string; ar: boolean; wireframe: boolean }) {
+function stressToColor(stress: number): THREE.Color {
+  const c = new THREE.Color()
+  if (stress < 0.25) c.setRGB(0, stress * 4, 1)
+  else if (stress < 0.5) c.setRGB(0, 1, 1 - (stress - 0.25) * 4)
+  else if (stress < 0.75) c.setRGB((stress - 0.5) * 4, 1, 0)
+  else c.setRGB(1, 1 - (stress - 0.75) * 4, 0)
+  return c
+}
+
+function RealSTLModel({ url, ar, wireframe, nodeStressMap }: { url: string; ar: boolean; wireframe: boolean; nodeStressMap?: { x: number; y: number; z: number; stress: number }[] }) {
   const geometry = useLoader(STLLoader, url)
   const ref = useRef<THREE.Mesh>(null)
 
   useFrame((_, d) => { if (ref.current && ar) ref.current.rotation.y += d * 0.5 })
 
-  const mat = useMemo(() => new THREE.MeshStandardMaterial({ ...matProps('steel') }), [])
+  const mat = useMemo(() => new THREE.MeshStandardMaterial({ ...matProps('steel'), vertexColors: !!nodeStressMap }), [nodeStressMap])
   useEffect(() => { mat.wireframe = wireframe; mat.needsUpdate = true }, [mat, wireframe])
 
   const centeredGeometry = useMemo(() => {
@@ -53,8 +62,32 @@ function RealSTLModel({ url, ar, wireframe }: { url: string; ar: boolean; wirefr
     const scale = maxDim > 0 ? 3.0 / maxDim : 1
     geo.scale(scale, scale, scale)
 
+    // Apply vertex colors from FEA stress map
+    if (nodeStressMap && nodeStressMap.length > 0) {
+      const positions = geo.attributes.position
+      const colors = new Float32Array(positions.count * 3)
+      const tempVec = new THREE.Vector3()
+      for (let i = 0; i < positions.count; i++) {
+        tempVec.fromBufferAttribute(positions, i)
+        let minDist = Infinity
+        let nearestStress = 0.5
+        for (const node of nodeStressMap) {
+          const dx = tempVec.x - node.x * scale
+          const dy = tempVec.y - node.y * scale
+          const dz = tempVec.z - node.z * scale
+          const dist = dx*dx + dy*dy + dz*dz
+          if (dist < minDist) { minDist = dist; nearestStress = node.stress }
+        }
+        const col = stressToColor(nearestStress)
+        colors[i * 3] = col.r
+        colors[i * 3 + 1] = col.g
+        colors[i * 3 + 2] = col.b
+      }
+      geo.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+    }
+
     return geo
-  }, [geometry])
+  }, [geometry, nodeStressMap])
 
   return <mesh ref={ref} geometry={centeredGeometry} material={mat} />
 }
@@ -783,11 +816,66 @@ function ToolBtn({ icon, label, active, onClick }: { icon: React.ReactNode; labe
 export default function ModelViewer({ onClose, modelType = 'empty', pendingModel = 'empty', isGenerating = false, shapeDims = {}, heatmap: heatmapProp, onHeatmapToggle, cadUrls = null, stlUrl = null, realSpecs = null }: ModelViewerProps) {
   const [wireframe, setWireframe]     = useState(false)
   const [heatmap, setHeatmap]         = useState(false)
+  const [feaRunning, setFeaRunning]   = useState(false)
+  const [feaResults, setFeaResults]   = useState<{ max_stress_mpa: number; min_stress_mpa: number; node_stress_map?: { x: number; y: number; z: number; stress: number }[] } | null>(null)
+
+  async function runFEA() {
+    if (!cadUrls?.step_url || feaRunning) return
+    setFeaRunning(true)
+    try {
+      const res = await fetch('https://web-production-9f493.up.railway.app/fea/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          step_url: cadUrls.step_url,
+          material: realSpecs?.material ?? 'steel',
+          load_magnitude: 1000,
+          load_direction: 'z',
+        })
+      })
+      const data = await res.json()
+      if (data.max_stress_mpa) {
+        setFeaResults({ max_stress_mpa: data.max_stress_mpa, min_stress_mpa: data.min_stress_mpa, node_stress_map: data.node_stress_map })
+        setHeatmap(true)
+        if (onHeatmapToggle) onHeatmapToggle()
+      }
+    } catch (e) {
+      console.error('FEA failed:', e)
+    }
+    setFeaRunning(false)
+  }
   useEffect(() => { if (heatmapProp !== undefined) setHeatmap(heatmapProp) }, [heatmapProp])
 
   const [gridVisible, setGrid]        = useState(true)
   const [autoRotate, setAutoRotate]   = useState(false)
   const [show2D, setShow2D]           = useState(false)
+  const [drawingSvg, setDrawingSvg]   = useState<string | null>(null)
+  const [drawingLoading, setDrawingLoading] = useState(false)
+
+  async function fetchDrawing() {
+    if (!cadUrls?.step_url) return
+    setShow2D(true)
+    if (drawingSvg) return // already loaded
+    setDrawingLoading(true)
+    try {
+      const res = await fetch('https://web-production-9f493.up.railway.app/fea/drawing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          step_url: cadUrls.step_url,
+          component_name: realSpecs?.type ?? 'Component',
+          material: realSpecs?.material ?? 'Steel'
+        })
+      })
+      if (res.ok) {
+        const svg = await res.text()
+        setDrawingSvg(svg)
+      }
+    } catch (e) {
+      console.error('Drawing fetch failed:', e)
+    }
+    setDrawingLoading(false)
+  }
   const [zoomDelta, setZoomDelta]     = useState(0)
   const [dots, setDots]               = useState('.')
   const [toastMessage, setToastMessage] = useState<string | null>(null)
@@ -937,6 +1025,8 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
           <ToolBtn icon={<ZoomOut size={12} />}   label="Zoom out"    onClick={() => setZoomDelta(-1.5)} />
           <ToolBtn icon={<Box size={12} />}       label="Wireframe"   active={wireframe}   onClick={() => setWireframe(w => !w)} />
           <ToolBtn icon={<Grid3x3 size={12} />}   label="Toggle grid" active={gridVisible} onClick={() => setGrid(g => !g)} />
+          <ToolBtn icon={feaRunning ? <span style={{ fontSize: '8px', fontWeight: 700 }}>...</span> : <Activity size={12} />} label={cadUrls?.step_url ? 'Run stress analysis' : 'Stress analysis — generate a component first'} active={heatmap && !!feaResults} onClick={runFEA} />
+          <ToolBtn icon={<span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '-0.01em', lineHeight: 1 }}>2D</span>} label={cadUrls?.step_url ? 'Engineering drawing' : 'Engineering drawing — generate a component first'} active={show2D} onClick={() => cadUrls?.step_url ? fetchDrawing() : null} />
         </div>
 
         <button onClick={onClose}
@@ -974,8 +1064,43 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
             <span style={{ fontSize: '9px', fontWeight: 600, color: '#ffffff', fontFamily: F, letterSpacing: '0.1em', textTransform: 'uppercase' }}>2D Drawing</span>
           </div>
         )}
+        {feaResults && heatmap && (
+          <div style={{ position: 'absolute', bottom: '16px', left: '16px', zIndex: 5, backgroundColor: 'rgba(8,14,26,0.85)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', padding: '12px 14px', backdropFilter: 'blur(8px)', minWidth: '160px' }}>
+            <p style={{ margin: '0 0 8px', fontSize: '9px', fontWeight: 600, color: '#63b3ed', fontFamily: F, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Von Mises Stress</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                <div style={{ width: 12, height: 12, borderRadius: 2, background: '#ef4444' }} />
+                <span style={{ fontSize: '10px', color: '#e2e8f0', fontFamily: F }}>{feaResults.max_stress_mpa.toFixed(1)} MPa</span>
+              </div>
+              <div style={{ width: '100%', height: 8, borderRadius: 4, background: 'linear-gradient(to right, #3b82f6, #10b981, #f59e0b, #ef4444)' }} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                <div style={{ width: 12, height: 12, borderRadius: 2, background: '#3b82f6' }} />
+                <span style={{ fontSize: '10px', color: '#e2e8f0', fontFamily: F }}>{feaResults.min_stress_mpa.toFixed(1)} MPa</span>
+              </div>
+            </div>
+          </div>
+        )}
+        {feaRunning && (
+          <div style={{ position: 'absolute', bottom: '16px', left: '16px', zIndex: 5, backgroundColor: 'rgba(8,14,26,0.85)', border: '1px solid rgba(99,179,237,0.2)', borderRadius: '10px', padding: '12px 14px', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 16, height: 16, borderRadius: '50%', border: '2px solid rgba(99,179,237,0.2)', borderTopColor: '#63b3ed', animation: 'mvSpin 0.9s linear infinite' }} />
+            <span style={{ fontSize: '10px', color: '#63b3ed', fontFamily: F }}>Running FEA analysis...</span>
+          </div>
+        )}
 
-        {show2D && (modelType !== 'empty' || pendingModel !== 'empty') && (
+        {show2D && drawingLoading && (
+          <div style={{ position: 'absolute', inset: 0, zIndex: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(8,14,26,0.85)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 32, height: 32, borderRadius: '50%', border: '2px solid rgba(99,179,237,0.2)', borderTopColor: '#63b3ed', animation: 'mvSpin 0.9s linear infinite' }} />
+              <span style={{ fontSize: '11px', color: '#63b3ed', fontFamily: F }}>Generating engineering drawing...</span>
+            </div>
+          </div>
+        )}
+        {show2D && drawingSvg && !drawingLoading && (
+          <div style={{ position: 'absolute', inset: 0, zIndex: 6, background: 'white', overflow: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div dangerouslySetInnerHTML={{ __html: drawingSvg }} style={{ width: '100%', height: '100%' }} />
+          </div>
+        )}
+        {show2D && !drawingSvg && !drawingLoading && (modelType !== 'empty' || pendingModel !== 'empty') && (
           <div style={{ position: 'absolute', inset: 0, zIndex: 6, transition: 'opacity 0.4s ease', opacity: 1 }}>
             <Drawing2D
               modelType={pendingModel !== 'empty' ? pendingModel : modelType}
@@ -1004,7 +1129,7 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
               <pointLight       position={[-4, 2, 2]}   intensity={0.9} color="#c8dcff" />
               <InfiniteGrid visible={gridVisible} />
               {hasRealStl ? (
-                <RealSTLModel url={stlUrl!} ar={autoRotate} wireframe={wireframe} />
+                <RealSTLModel url={stlUrl!} ar={autoRotate} wireframe={wireframe} nodeStressMap={heatmap && feaResults?.node_stress_map ? feaResults.node_stress_map : undefined} />
               ) : (
                 <>
                   {modelType === 'spur_gear'    && <SpurGearModel    ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}

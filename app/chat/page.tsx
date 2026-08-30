@@ -5,8 +5,9 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import LoginTransition from '@/components/LoginTransition'
 import ProjectsPage from '@/components/ProjectsPage'
+import ProjectView from '@/components/ProjectView'
 import { useSmartSuggestions, trackMessage } from '@/hooks/useSmartSuggestions'
-import { ArrowUp, X, Search, StopCircle, Download } from 'lucide-react'
+import { ArrowUp, X, Search, StopCircle, Download, Paperclip } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import ModelViewer, { ModelType, ShapeDimensions } from '@/components/viewer/ModelViewer'
 import Sidebar, { SIDEBAR_EXPANDED, SIDEBAR_COLLAPSED, ThemePreference } from '@/components/sidebar/Sidebar'
@@ -140,9 +141,32 @@ interface InputBarProps {
   textMuted: string
   darkMode: boolean
   textareaRef: React.RefObject<HTMLTextAreaElement | null>
+  attachments: { file: File; base64: string; mediaType: string }[]
+  onAttach: (files: { file: File; base64: string; mediaType: string }[]) => void
+  onRemoveAttachment: (index: number) => void
 }
 
-function InputBar({ input, onChange, onKeyDown, onSend, onStop, isStreaming, placeholder, disclaimer, textPrimary, textMuted, darkMode, textareaRef }: InputBarProps) {
+function InputBar({ input, onChange, onKeyDown, onSend, onStop, isStreaming, placeholder, disclaimer, textPrimary, textMuted, darkMode, textareaRef, attachments, onAttach, onRemoveAttachment }: InputBarProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  async function handleFiles(files: FileList | null) {
+    if (!files) return
+    const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf']
+    const newAttachments: { file: File; base64: string; mediaType: string }[] = []
+    for (const file of Array.from(files) as File[]) {
+      if (!allowed.includes(file.type)) continue
+      const base64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve((reader.result as string).split(',')[1])
+        reader.readAsDataURL(file)
+      })
+      newAttachments.push({ file, base64, mediaType: file.type })
+    }
+    onAttach([...attachments, ...newAttachments])
+  }
+
+  const canSend = input.trim().length > 0 || attachments.length > 0
+
   return (
     <div style={{ width: '100%' }}>
       <div style={{
@@ -167,8 +191,8 @@ function InputBar({ input, onChange, onKeyDown, onSend, onStop, isStreaming, pla
             <StopCircle size={13} color="white" />
           </button>
         ) : (
-          <button onClick={onSend} disabled={!input.trim()} style={{ width: '30px', height: '30px', borderRadius: '8px', flexShrink: 0, backgroundColor: input.trim() ? '#0a1628' : (darkMode ? '#2a2f35' : '#d8d8d8'), border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: input.trim() ? 'pointer' : 'not-allowed', transition: 'background-color 0.2s' }}>
-            <ArrowUp size={13} color={input.trim() ? 'white' : (darkMode ? '#4a5568' : '#aaa')} />
+          <button onClick={onSend} disabled={!canSend} style={{ width: '30px', height: '30px', borderRadius: '8px', flexShrink: 0, backgroundColor: canSend ? '#0a1628' : (darkMode ? '#2a2f35' : '#d8d8d8'), border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: canSend ? 'pointer' : 'not-allowed', transition: 'background-color 0.2s' }}>
+            <ArrowUp size={13} color={canSend ? 'white' : (darkMode ? '#4a5568' : '#aaa')} />
           </button>
         )}
       </div>
@@ -254,6 +278,10 @@ export default function ChatPage() {
   const [chatKey, setChatKey] = useState(0)
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null)
   const [isLoadingChat, setIsLoadingChat] = useState(false)
+  const [attachments, setAttachments] = useState<{ file: File; base64: string; mediaType: string }[]>([])
+  const [designAnalysis, setDesignAnalysis] = useState<{ warnings: { level: string; category: string; message: string }[]; overall_score: number | null; summary: string } | null>(null)
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null)
+  const [selectedProject, setSelectedProject] = useState<{ id: string; name: string; owner_id: string; share_token: string; link_permission: string } | null>(null)
   const conversationCache = useRef<Record<string, { messages: ChatMessage[]; stlUrl: string | null; specs: { type: string; dimensions: string; material: string } | null }>>({})
   const [exportMenuOpen, setExportMenuOpen] = useState(false)
   const [conversations, setConversations] = useState<{ id: string; title: string; time: string }[]>([])
@@ -383,9 +411,10 @@ export default function ChatPage() {
           visibleLines: m.role === 'assistant' ? splitLines(content).length : 1,
         }
       })
-      const lastStlMessage = [...data.messages].reverse().find((m: { has_stl?: boolean; stl_url?: string }) => m.has_stl && m.stl_url)
+      const lastStlMessage = [...data.messages].reverse().find((m: { has_stl?: boolean; stl_url?: string; step_url?: string }) => m.has_stl && m.stl_url)
       if (lastStlMessage) {
         setCurrentStlUrl(lastStlMessage.stl_url)
+        setCurrentCadUrls({ stl_url: lastStlMessage.stl_url ?? null, step_url: lastStlMessage.step_url ?? null, dxf_url: null })
         setViewerOpen(true)
         setActiveModel('cube')
         const specMatch = lastStlMessage.content?.match(/type:\s*(.+)/i)
@@ -446,6 +475,8 @@ export default function ChatPage() {
     const trimmed = text.trim()
     if (!trimmed || isStreaming) return
     setInput('')
+    setAttachments([])
+    setDesignAnalysis(null)
 
     setMessages(prev => [...prev, { role: 'user', lines: [trimmed], visibleLines: 1 }])
     setIsStreaming(true)
@@ -463,6 +494,8 @@ export default function ChatPage() {
           messages: [{ role: 'user', content: trimmed }],
           user_id: session?.user?.id ?? 'anonymous',
           conversation_id: currentConversationId,
+          project_id: currentProjectId,
+          attachments: attachments.map(a => ({ base64: a.base64, mediaType: a.mediaType, name: a.file.name })),
         }),
       })
 
@@ -531,6 +564,9 @@ export default function ChatPage() {
               }
             } else if (parsed.type === 'done') {
               finalData = parsed
+              if (parsed.design_analysis) {
+                setDesignAnalysis(parsed.design_analysis)
+              }
             }
           } catch {}
         }
@@ -560,12 +596,13 @@ export default function ChatPage() {
         setActiveModel('empty')
         setCurrentStlUrl(finalData.stl_url ?? null)
         const specMatch = fullResponse.match(/type:\s*(.+)/i)
-        const dimsMatch = fullResponse.match(/dimensions:\s*(.+)/i)
-        const materialMatch = fullResponse.match(/material:\s*(.+)/i)
+        const dimsMatch = fullResponse.match(/dimensions?:\s*(.+)/i) || fullResponse.match(/side_length\s*=\s*([\d.]+)/i)
+        const materialMatch = fullResponse.match(/material(?:\s+recommendation)?[:\s]+([A-Za-z0-9\s\-]+)/i)
+        const componentMatch = fullResponse.match(/(?:generating?|create?|design)\s+(?:a\s+)?([\w\s]+?)(?:\s+with|\s+using|\s*[-—]|\.|,|\n)/i)
         setRealSpecs({
-          type: specMatch ? specMatch[1].trim() : '',
-          dimensions: dimsMatch ? dimsMatch[1].trim() : '',
-          material: materialMatch ? materialMatch[1].trim() : '',
+          type: specMatch ? specMatch[1].trim() : (componentMatch ? componentMatch[1].trim() : 'Component'),
+          dimensions: dimsMatch ? (dimsMatch[1] || dimsMatch[0]).trim() : '',
+          material: materialMatch ? materialMatch[1].trim().split('\n')[0].trim() : 'Steel',
         })
         setTimeout(() => {
           setIsGenerating(false)
@@ -651,6 +688,9 @@ export default function ChatPage() {
     isStreaming, surface, border, textPrimary, textMuted,
     darkMode: dm, textareaRef, placeholder: '',
     disclaimer: t('disclaimer'),
+    attachments,
+    onAttach: setAttachments,
+    onRemoveAttachment: (i: number) => setAttachments(prev => prev.filter((_, idx) => idx !== i)),
   }
 
   function greeting() {
@@ -868,6 +908,34 @@ export default function ChatPage() {
                 </div>
                 <div style={{ padding: '12px 24px 20px', backgroundColor: bg, flexShrink: 0 }}>
                   <div style={{ maxWidth: '700px', margin: '0 auto' }}>
+                    {designAnalysis && designAnalysis.warnings && designAnalysis.warnings.length > 0 && (
+                      <div style={{ marginBottom: 12, borderRadius: 10, border: `1px solid ${border}`, overflow: 'hidden' }}>
+                        <div style={{ padding: '8px 14px', background: dm ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: textMuted, fontFamily: F, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Design Analysis</span>
+                          {designAnalysis.overall_score && (
+                            <span style={{ fontSize: 11, fontWeight: 600, color: designAnalysis.overall_score >= 8 ? '#10b981' : designAnalysis.overall_score >= 5 ? '#f59e0b' : '#ef4444', fontFamily: F }}>
+                              Score: {designAnalysis.overall_score}/10
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ padding: '8px 14px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {designAnalysis.warnings.map((w, i) => (
+                            <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                              <span style={{ fontSize: 12, flexShrink: 0, marginTop: 1 }}>
+                                {w.level === 'critical' ? '🔴' : w.level === 'warning' ? '🟡' : '🟢'}
+                              </span>
+                              <div>
+                                <span style={{ fontSize: 10, fontWeight: 600, color: textMuted, fontFamily: F, letterSpacing: '0.06em', textTransform: 'uppercase', marginRight: 6 }}>{w.category}</span>
+                                <span style={{ fontSize: 12, color: textPrimary, fontFamily: F, fontWeight: 300, lineHeight: 1.5 }}>{w.message}</span>
+                              </div>
+                            </div>
+                          ))}
+                          {designAnalysis.summary && (
+                            <p style={{ margin: '6px 0 0', fontSize: 11, color: textMuted, fontFamily: F, fontStyle: 'italic' }}>{designAnalysis.summary}</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
                     <InputBar {...inputBarProps} placeholder="Ask a follow-up..." />
                   </div>
                 </div>
@@ -917,8 +985,28 @@ export default function ChatPage() {
           </div>
         )}
 
-        {page === 'projects' && (
-          <ProjectsPage darkMode={dm} textPrimary={textPrimary} textMuted={textMuted} border={border} bg={bg} />
+        {page === 'projects' && !selectedProject && (
+          <ProjectsPage
+            darkMode={dm} textPrimary={textPrimary} textMuted={textMuted} border={border} bg={bg}
+            onSelectProject={(project) => setSelectedProject(project)}
+          />
+        )}
+        {page === 'projects' && selectedProject && (
+          <ProjectView
+            project={selectedProject}
+            darkMode={dm} textPrimary={textPrimary} textMuted={textMuted} border={border} bg={bg}
+            onBack={() => setSelectedProject(null)}
+            onSelectChat={(conversationId) => {
+              setPage('home')
+              setSelectedProject(null)
+              loadConversation(conversationId)
+            }}
+            onNewChat={(projectId) => {
+              setPage('home')
+              setSelectedProject(null)
+              setCurrentProjectId(projectId)
+            }}
+          />
         )}
       </main>
     {exportMenuOpen && currentCadUrls && (
