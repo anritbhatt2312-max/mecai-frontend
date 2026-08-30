@@ -909,29 +909,35 @@ export default function ChatPage() {
                 <div style={{ padding: '12px 24px 20px', backgroundColor: bg, flexShrink: 0 }}>
                   <div style={{ maxWidth: '700px', margin: '0 auto' }}>
                     {designAnalysis && designAnalysis.warnings && designAnalysis.warnings.length > 0 && (
-                      <div style={{ marginBottom: 12, borderRadius: 10, border: `1px solid ${border}`, overflow: 'hidden' }}>
-                        <div style={{ padding: '8px 14px', background: dm ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <span style={{ fontSize: 11, fontWeight: 600, color: textMuted, fontFamily: F, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Design Analysis</span>
+                      <div style={{ marginBottom: 12, borderRadius: 8, border: `1px solid ${border}`, overflow: 'hidden', background: dm ? 'rgba(255,255,255,0.02)' : '#fafafa' }}>
+                        <div style={{ padding: '10px 16px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div style={{ width: 6, height: 6, borderRadius: '50%', background: designAnalysis.overall_score ? (designAnalysis.overall_score >= 8 ? '#10b981' : designAnalysis.overall_score >= 5 ? '#f59e0b' : '#ef4444') : '#6b7280' }} />
+                            <span style={{ fontSize: 10, fontWeight: 600, color: textMuted, fontFamily: F, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Design Review</span>
+                          </div>
                           {designAnalysis.overall_score && (
-                            <span style={{ fontSize: 11, fontWeight: 600, color: designAnalysis.overall_score >= 8 ? '#10b981' : designAnalysis.overall_score >= 5 ? '#f59e0b' : '#ef4444', fontFamily: F }}>
-                              Score: {designAnalysis.overall_score}/10
-                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <div style={{ display: 'flex', gap: 2 }}>
+                                {[1,2,3,4,5,6,7,8,9,10].map(n => (
+                                  <div key={n} style={{ width: 14, height: 3, borderRadius: 2, background: n <= designAnalysis.overall_score! ? (designAnalysis.overall_score! >= 8 ? '#10b981' : designAnalysis.overall_score! >= 5 ? '#f59e0b' : '#ef4444') : (dm ? 'rgba(255,255,255,0.1)' : '#e5e7eb') }} />
+                                ))}
+                              </div>
+                              <span style={{ fontSize: 10, fontWeight: 600, color: textMuted, fontFamily: F }}>{designAnalysis.overall_score}/10</span>
+                            </div>
                           )}
                         </div>
-                        <div style={{ padding: '8px 14px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div style={{ padding: '10px 16px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                           {designAnalysis.warnings.map((w, i) => (
-                            <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                              <span style={{ fontSize: 12, flexShrink: 0, marginTop: 1 }}>
-                                {w.level === 'critical' ? '🔴' : w.level === 'warning' ? '🟡' : '🟢'}
-                              </span>
-                              <div>
-                                <span style={{ fontSize: 10, fontWeight: 600, color: textMuted, fontFamily: F, letterSpacing: '0.06em', textTransform: 'uppercase', marginRight: 6 }}>{w.category}</span>
-                                <span style={{ fontSize: 12, color: textPrimary, fontFamily: F, fontWeight: 300, lineHeight: 1.5 }}>{w.message}</span>
+                            <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 10px', borderRadius: 6, background: w.level === 'critical' ? (dm ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.05)') : w.level === 'warning' ? (dm ? 'rgba(245,158,11,0.08)' : 'rgba(245,158,11,0.05)') : (dm ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.05)'), border: `1px solid ${w.level === 'critical' ? 'rgba(239,68,68,0.2)' : w.level === 'warning' ? 'rgba(245,158,11,0.2)' : 'rgba(16,185,129,0.2)'}` }}>
+                              <div style={{ width: 3, alignSelf: 'stretch', borderRadius: 2, background: w.level === 'critical' ? '#ef4444' : w.level === 'warning' ? '#f59e0b' : '#10b981', flexShrink: 0 }} />
+                              <div style={{ flex: 1 }}>
+                                <span style={{ fontSize: 9, fontWeight: 700, color: w.level === 'critical' ? '#ef4444' : w.level === 'warning' ? '#f59e0b' : '#10b981', fontFamily: F, letterSpacing: '0.1em', textTransform: 'uppercase', display: 'block', marginBottom: 2 }}>{w.level} · {w.category}</span>
+                                <span style={{ fontSize: 12, color: textPrimary, fontFamily: F, fontWeight: 300, lineHeight: 1.6 }}>{w.message}</span>
                               </div>
                             </div>
                           ))}
                           {designAnalysis.summary && (
-                            <p style={{ margin: '6px 0 0', fontSize: 11, color: textMuted, fontFamily: F, fontStyle: 'italic' }}>{designAnalysis.summary}</p>
+                            <p style={{ margin: '4px 0 0', fontSize: 11, color: textMuted, fontFamily: F, lineHeight: 1.6 }}>{designAnalysis.summary}</p>
                           )}
                         </div>
                       </div>
