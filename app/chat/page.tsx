@@ -6,7 +6,7 @@ import { useSession } from 'next-auth/react'
 import LoginTransition from '@/components/LoginTransition'
 import ProjectsPage from '@/components/ProjectsPage'
 import { useSmartSuggestions, trackMessage } from '@/hooks/useSmartSuggestions'
-import { ArrowUp, X, Search, StopCircle, Download, Plus, Copy, RotateCcw, Pencil, ChevronDown, Sun, Moon, AlertCircle, RefreshCw, ThumbsUp, ThumbsDown } from 'lucide-react'
+import { ArrowUp, X, Search, StopCircle, Download, Plus, Copy, RotateCcw, Pencil, ChevronDown, Sun, Moon, AlertCircle, RefreshCw, ThumbsUp, ThumbsDown, Trash2 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import ModelViewer, { ModelType, ShapeDimensions } from '@/components/viewer/ModelViewer'
 import Sidebar, { SIDEBAR_EXPANDED, SIDEBAR_COLLAPSED, ThemePreference } from '@/components/sidebar/Sidebar'
@@ -152,10 +152,10 @@ function InputBar({ input, onChange, onKeyDown, onSend, onStop, isStreaming, pla
         border: `1px solid ${darkMode ? '#2e3847' : '#e0e0e0'}`,
         borderRadius: '12px', padding: '10px 12px 10px 10px',
       }}>
-        <button title="Attach file" style={{ width: '28px', height: '28px', borderRadius: '7px', border: 'none', backgroundColor: 'transparent', color: darkMode ? '#4a5568' : '#aaa', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, transition: 'color 0.15s, background 0.15s' }}
-          onMouseEnter={e => { e.currentTarget.style.color = darkMode ? '#94a3b8' : '#555'; e.currentTarget.style.backgroundColor = darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }}
-          onMouseLeave={e => { e.currentTarget.style.color = darkMode ? '#4a5568' : '#aaa'; e.currentTarget.style.backgroundColor = 'transparent' }}>
-          <Plus size={16} />
+        <button title="Attach file" style={{ width: '28px', height: '28px', borderRadius: '7px', border: 'none', backgroundColor: 'transparent', color: darkMode ? '#ffffff' : '#000000', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, transition: 'color 0.15s, background 0.15s' }}
+          onMouseEnter={e => { e.currentTarget.style.backgroundColor = darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }}
+          onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent' }}>
+          <Plus size={18} strokeWidth={2.5} />
         </button>
         <textarea
           ref={textareaRef} value={input}
@@ -173,9 +173,11 @@ function InputBar({ input, onChange, onKeyDown, onSend, onStop, isStreaming, pla
             <StopCircle size={13} color="white" />
           </button>
         ) : (
-          <button onClick={onSend} disabled={!input.trim()} style={{ width: '30px', height: '30px', borderRadius: '8px', flexShrink: 0, backgroundColor: input.trim() ? '#0a1628' : (darkMode ? '#2a2f35' : '#d8d8d8'), border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: input.trim() ? 'pointer' : 'not-allowed', transition: 'background-color 0.2s' }}>
-            <ArrowUp size={13} color={input.trim() ? 'white' : (darkMode ? '#4a5568' : '#aaa')} />
-          </button>
+          input.trim() ? (
+            <button onClick={onSend} style={{ width: '30px', height: '30px', borderRadius: '8px', flexShrink: 0, backgroundColor: '#0a1628', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'background-color 0.2s, opacity 0.15s', animation: 'scrollBtnIn 0.15s ease' }}>
+              <ArrowUp size={13} color="white" />
+            </button>
+          ) : null
         )}
       </div>
       <p style={{ textAlign: 'center', fontSize: '12px', fontWeight: 300, color: darkMode ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.35)', marginTop: '8px', fontFamily: F, letterSpacing: '0.01em' }}>
@@ -248,7 +250,45 @@ export default function ChatPage() {
   const [systemDark, setSystemDark] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
+  const [libraryOpen, setLibraryOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
+
+  interface LibraryItem {
+    id: string
+    name: string
+    type: '3D Model' | '2D Drawing' | 'Screenshot'
+    stlUrl?: string | null
+    cadUrls?: CadUrls | null
+    modelType?: string
+    savedAt: string
+  }
+
+  const [library, setLibrary] = useState<LibraryItem[]>(() => {
+    try { const saved = localStorage.getItem('mecai_library'); return saved ? JSON.parse(saved) : [] }
+    catch { return [] }
+  })
+
+  function saveToLibrary(name: string, stlUrl: string | null, cadUrls: CadUrls | null, modelType: string) {
+    const item: LibraryItem = {
+      id: Date.now().toString(),
+      name,
+      type: '3D Model',
+      stlUrl,
+      cadUrls,
+      modelType,
+      savedAt: new Date().toLocaleString(),
+    }
+    const updated = [item, ...library]
+    setLibrary(updated)
+    localStorage.setItem('mecai_library', JSON.stringify(updated))
+  }
+
+  function deleteFromLibrary(id: string) {
+    const updated = library.filter(i => i.id !== id)
+    setLibrary(updated)
+    localStorage.setItem('mecai_library', JSON.stringify(updated))
+  }
+
   const [searchQuery, setSearchQuery] = useState('')
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
@@ -294,7 +334,8 @@ export default function ChatPage() {
   }
 
   const inChat = messages.length > 0
-  const sidebarWidth = isMobile ? 0 : (sidebarOpen ? SIDEBAR_EXPANDED : SIDEBAR_COLLAPSED)
+  const [effectiveSidebarWidth, setEffectiveSidebarWidth] = useState(SIDEBAR_COLLAPSED)
+  const sidebarWidth = isMobile ? 0 : effectiveSidebarWidth
 
   const [units, setUnits] = useState<'Metric (mm, MPa)' | 'Imperial (in, psi)'>('Metric (mm, MPa)')
   const [language, setLanguage] = useState('English')
@@ -424,6 +465,44 @@ export default function ChatPage() {
     setIsGenerating(false); setActiveModel(model)
   }, [])
 
+  function generateTitle(message: string): string {
+    const m = message.toLowerCase().trim()
+    // Engineering component patterns
+    if (m.includes('spur gear') || (m.includes('gear') && m.includes('teeth'))) return 'Spur Gear Design'
+    if (m.includes('helical gear')) return 'Helical Gear Design'
+    if (m.includes('bevel gear')) return 'Bevel Gear Design'
+    if (m.includes('bearing')) return 'Bearing Selection'
+    if (m.includes('shaft')) return 'Shaft Design'
+    if (m.includes('bolt') || m.includes('screw') || m.includes('fastener')) return 'Fastener Design'
+    if (m.includes('spring')) return 'Spring Design'
+    if (m.includes('pulley')) return 'Pulley Design'
+    if (m.includes('sprocket') || m.includes('chain')) return 'Sprocket & Chain'
+    if (m.includes('bracket')) return 'Bracket Design'
+    if (m.includes('i-beam') || m.includes('i beam')) return 'I-Beam Analysis'
+    if (m.includes('c-channel') || m.includes('channel')) return 'C-Channel Design'
+    if (m.includes('pipe') || m.includes('flange')) return 'Pipe & Flange'
+    if (m.includes('heat sink')) return 'Heat Sink Design'
+    if (m.includes('cam')) return 'Cam Mechanism'
+    if (m.includes('connecting rod') || m.includes('conrod')) return 'Connecting Rod'
+    // Analysis patterns
+    if (m.includes('von mises') || m.includes('stress')) return 'Stress Analysis'
+    if (m.includes('fatigue')) return 'Fatigue Analysis'
+    if (m.includes('torque')) return 'Torque Calculation'
+    if (m.includes('bending')) return 'Bending Analysis'
+    if (m.includes('pressure vessel')) return 'Pressure Vessel'
+    if (m.includes('material') && m.includes('compar')) return 'Material Comparison'
+    if (m.includes('safety factor')) return 'Safety Factor Analysis'
+    if (m.includes('thermal') || m.includes('heat')) return 'Thermal Analysis'
+    // Geometry
+    if (m.includes('cylinder')) return 'Cylinder Design'
+    if (m.includes('sphere')) return 'Sphere Design'
+    if (m.includes('cube') || m.includes('block')) return 'Block Design'
+    if (m.includes('assembly')) return 'Assembly Design'
+    // Generic fallback — use first few meaningful words
+    const words = message.trim().split(/\s+/).slice(0, 5).join(' ')
+    return words.length > 40 ? words.slice(0, 40) + '…' : words
+  }
+
   const sendMessage = useCallback(async (text: string) => {
     const trimmed = text.trim()
     if (!trimmed || isStreaming) return
@@ -457,7 +536,7 @@ export default function ChatPage() {
         setConversations(prev => {
           const exists = prev.find(c => c.id === data.conversation_id)
           if (exists) return prev
-          return [{ id: data.conversation_id, title: trimmed.slice(0, 50), time: 'Just now' }, ...prev]
+          return [{ id: data.conversation_id, title: generateTitle(trimmed), time: 'Just now' }, ...prev]
         })
       }
 
@@ -694,11 +773,13 @@ export default function ChatPage() {
           onToggle={() => setSidebarOpen(o => !o)}
           onNavigate={handleNavigate}
           onSearchOpen={() => { setSearchOpen(true); setSearchQuery('') }}
+          onLibraryOpen={() => setLibraryOpen(true)}
           darkMode={dm}
           onThemeChange={handleThemeChange}
           themePreference={themePreference}
           conversations={conversations.length > 0 ? conversations : EMPTY_CHATS}
           onSelectChat={loadConversation}
+          onWidthChange={setEffectiveSidebarWidth}
           onRenameChat={(id, title) => {
             setConversations(prev => prev.map(c => c.id === id ? { ...c, title } : c))
           }}
@@ -868,6 +949,22 @@ export default function ChatPage() {
                                           {btn.icon}
                                         </button>
                                       ))}
+                                      {/* Save to Library — only shows if message has a model */}
+                                      {(msg as AssistantMessage).cadUrls?.stl_url && (
+                                        <button title="Save to Library" onClick={() => saveToLibrary(
+                                          messages[i - 1]?.lines[0]?.slice(0, 40) ?? 'Saved Model',
+                                          (msg as AssistantMessage).cadUrls?.stl_url ?? null,
+                                          (msg as AssistantMessage).cadUrls ?? null,
+                                          activeModel
+                                        )}
+                                          style={{ width: '28px', height: '28px', borderRadius: '6px', border: 'none', backgroundColor: 'transparent', color: textMuted, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'color 0.15s' }}
+                                          onMouseEnter={e => { e.currentTarget.style.color = '#4a7fff' }}
+                                          onMouseLeave={e => { e.currentTarget.style.color = textMuted }}>
+                                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+                                          </svg>
+                                        </button>
+                                      )}
                                     </div>
                                   )}
                                   {/* #7 Mobile 3D bottom sheet trigger */}
@@ -1003,6 +1100,76 @@ export default function ChatPage() {
           </button>
         </div>
       )}
+
+      {/* Library Panel */}
+      {libraryOpen && (
+        <>
+          <div onClick={() => setLibraryOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 350, backgroundColor: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(4px)' }} />
+          <div style={{ position: 'fixed', top: 0, left: `${sidebarWidth}px`, bottom: 0, width: '360px', zIndex: 351, backgroundColor: dm ? '#0d1117' : '#ffffff', borderRight: `1px solid ${border}`, display: 'flex', flexDirection: 'column', boxShadow: '4px 0 32px rgba(0,0,0,0.15)' }}>
+            {/* Header */}
+            <div style={{ padding: '20px 20px 16px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+              <div>
+                <p style={{ margin: 0, fontSize: '15px', fontWeight: 600, color: textPrimary, fontFamily: F }}>Library</p>
+                <p style={{ margin: '2px 0 0', fontSize: '12px', color: textMuted, fontFamily: F }}>{library.length} saved {library.length === 1 ? 'item' : 'items'}</p>
+              </div>
+              <button onClick={() => setLibraryOpen(false)} style={{ width: '28px', height: '28px', borderRadius: '7px', border: `1px solid ${border}`, backgroundColor: 'transparent', color: textMuted, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                <X size={14} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '12px' }}>
+              {library.length === 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '12px', opacity: 0.5 }}>
+                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke={textMuted} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+                  </svg>
+                  <div style={{ textAlign: 'center' }}>
+                    <p style={{ margin: 0, fontSize: '13px', fontWeight: 500, color: textPrimary, fontFamily: F }}>Your library is empty</p>
+                    <p style={{ margin: '4px 0 0', fontSize: '11px', color: textMuted, fontFamily: F }}>Save models from the chat using the bookmark icon</p>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {library.map(item => (
+                    <div key={item.id} style={{ padding: '12px 14px', borderRadius: '10px', border: `1px solid ${border}`, backgroundColor: dm ? '#161b22' : '#fafafa', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      {/* Icon */}
+                      <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: '#0a1628', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <CadIcon />
+                      </div>
+                      {/* Info */}
+                      <div style={{ flex: 1, overflow: 'hidden' }}>
+                        <p style={{ margin: 0, fontSize: '13px', fontWeight: 500, color: textPrimary, fontFamily: F, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</p>
+                        <p style={{ margin: '2px 0 0', fontSize: '11px', color: textMuted, fontFamily: F }}>{item.type} · {item.savedAt}</p>
+                      </div>
+                      {/* Actions */}
+                      <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                        {item.stlUrl && (
+                          <button title="View in 3D" onClick={() => { setCurrentStlUrl(item.stlUrl!); setViewerOpen(true); setLibraryOpen(false) }}
+                            style={{ width: '28px', height: '28px', borderRadius: '6px', border: `1px solid ${border}`, backgroundColor: 'transparent', color: textMuted, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'color 0.15s' }}
+                            onMouseEnter={e => { e.currentTarget.style.color = '#4a7fff' }}
+                            onMouseLeave={e => { e.currentTarget.style.color = textMuted }}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                            </svg>
+                          </button>
+                        )}
+                        <button title="Delete" onClick={() => deleteFromLibrary(item.id)}
+                          style={{ width: '28px', height: '28px', borderRadius: '6px', border: `1px solid ${border}`, backgroundColor: 'transparent', color: textMuted, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'color 0.15s' }}
+                          onMouseEnter={e => { e.currentTarget.style.color = '#f87171' }}
+                          onMouseLeave={e => { e.currentTarget.style.color = textMuted }}>
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
     </>
   )
 }
