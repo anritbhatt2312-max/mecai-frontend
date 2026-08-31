@@ -140,7 +140,7 @@ interface InputBarProps {
   textPrimary: string
   textMuted: string
   darkMode: boolean
-  textareaRef: React.RefObject<HTMLTextAreaElement>
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>
   attachments: { file: File; base64: string; mediaType: string }[]
   onAttach: (files: { file: File; base64: string; mediaType: string }[]) => void
   onRemoveAttachment: (index: number) => void
