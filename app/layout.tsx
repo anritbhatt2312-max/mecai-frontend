@@ -14,7 +14,12 @@ export const metadata: Metadata = {
   title: 'MecAI',
   description: 'AI-powered mechanical engineering assistant',
   icons: {
-    icon: '/favicon.svg',
+    icon: [
+      { url: '/favicon-32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/favicon-logo.jpg', sizes: '512x512', type: 'image/jpeg' },
+    ],
+    shortcut: '/favicon-32.png',
+    apple: '/favicon-logo.jpg',
   },
 }
 
