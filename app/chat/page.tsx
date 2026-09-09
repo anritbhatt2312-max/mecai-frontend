@@ -545,6 +545,7 @@ export default function ChatPage() {
                   .replace(/COMPONENT_REQUEST[\s\S]*?END_COMPONENT_REQUEST/g, '')
                   .replace(/ASSEMBLY_REQUEST[\s\S]*?END_ASSEMBLY_REQUEST/g, '')
                   .replace(/CADQUERY_CODE_START[\s\S]*?CADQUERY_CODE_END/g, '')
+                  .replace(/CADQUERY_CODE_START[\s\S]*/g, '')
                   .trim()
                 const newChars = cleanedSoFar.slice(displayedText.length + pendingText.length)
                 pendingText += newChars
@@ -591,9 +592,12 @@ export default function ChatPage() {
 
       if (finalData.has_stl) {
         setCurrentCadUrls(cadUrls)
-        setViewerOpen(true)
         setIsGenerating(true)
         setActiveModel('empty')
+        // Delay viewer until typewriter finishes
+        const charCount = fullResponse.replace(/CADQUERY_CODE_START[\s\S]*?CADQUERY_CODE_END/g, '').length
+        const typewriterDelay = Math.min(charCount * 18, 6000)
+        setTimeout(() => { setViewerOpen(true) }, typewriterDelay)
         setCurrentStlUrl(finalData.stl_url ?? null)
         const specMatch = fullResponse.match(/type:\s*(.+)/i)
         const dimsMatch = fullResponse.match(/dimensions?:\s*(.+)/i) || fullResponse.match(/side_length\s*=\s*([\d.]+)/i)
@@ -968,7 +972,7 @@ export default function ChatPage() {
                       )}
                       {promptCards.map((card, i) => (
                         <button key={card.title}
-                          onClick={() => { if (card.model) openModelInViewer(card.model); sendMessage(card.description) }}
+                          onClick={() => { sendMessage(card.description) }}
                           style={{ backgroundColor: dm ? '#161b22' : '#fafafa', borderRadius: '10px', padding: '18px 20px', textAlign: 'left', border: `1px solid ${dm ? '#21262d' : '#e8e8e8'}`, cursor: 'pointer', transition: 'border-color 0.15s, background-color 0.15s', fontFamily: F, minHeight: '120px', display: 'flex', flexDirection: 'column', gap: '7px', animation: 'cardFadeUp 0.5s cubic-bezier(0.22,0.68,0,1.2) both', animationDelay: `${0.15 + i * 0.08}s` }}
                           onMouseEnter={e => { const el = e.currentTarget as HTMLButtonElement; el.style.borderColor = dm ? '#444' : '#0a1628'; el.style.backgroundColor = dm ? '#1c2128' : '#ffffff' }}
                           onMouseLeave={e => { const el = e.currentTarget as HTMLButtonElement; el.style.borderColor = dm ? '#21262d' : '#e8e8e8'; el.style.backgroundColor = dm ? '#161b22' : '#fafafa' }}>
