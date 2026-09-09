@@ -260,7 +260,7 @@ export default function ChatPage() {
     typeof window !== 'undefined' ? Math.floor(window.innerWidth * 0.45) : 480
   )
   const [isDragging, setIsDragging] = useState(false)
-  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
   const [page, setPage] = useState<'home' | 'projects'>('home')
   const [themePreference, setThemePreference] = useState<ThemePreference>('system')
   const [systemDark, setSystemDark] = useState(false)
@@ -1015,6 +1015,10 @@ export default function ChatPage() {
               setPage('home')
               setSelectedProject(null)
               setCurrentProjectId(projectId)
+              setCurrentConversationId(null)
+              setMessages([])
+              setViewerOpen(false)
+              setActiveModel('empty')
             }}
           />
         )}
