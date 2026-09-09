@@ -568,6 +568,10 @@ export default function ChatPage() {
               if (parsed.design_analysis) {
                 setDesignAnalysis(parsed.design_analysis)
               }
+            } else if (parsed.type === 'design_analysis') {
+              if (parsed.design_analysis) {
+                setDesignAnalysis(parsed.design_analysis)
+              }
             }
           } catch {}
         }
