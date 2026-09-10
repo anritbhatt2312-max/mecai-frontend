@@ -488,7 +488,7 @@ export default function ChatPage() {
     setMessages(prev => [...prev, { role: 'assistant', lines: [], visibleLines: 0 } as AssistantMessage])
 
     try {
-      const streamResponse = await fetch('https://web-production-9f493.up.railway.app/chat/stream', {
+      const response = await fetch('https://web-production-9f493.up.railway.app/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -499,146 +499,93 @@ export default function ChatPage() {
           attachments: attachments.map(a => ({ base64: a.base64, mediaType: a.mediaType, name: a.file.name })),
         }),
       })
-
-      if (!streamResponse.ok) throw new Error(`Server error: ${streamResponse.status}`)
-
-      const reader = streamResponse.body!.getReader()
-      const decoder = new TextDecoder()
-      let fullResponse = ''
-      let finalData: { has_stl?: boolean; stl_url?: string; step_url?: string; dxf_url?: string; conversation_id?: string } = {}
-      let displayedText = ''
-      let pendingText = ''
-      let typewriterRunning = false
-
-      const typewriterTick = () => {
-        if (abortRef.current) return
-        if (pendingText.length > 0) {
-          const charsToAdd = Math.min(3, pendingText.length)
-          displayedText += pendingText.slice(0, charsToAdd)
-          pendingText = pendingText.slice(charsToAdd)
-          setMessages(prev => {
-            const u = [...prev]
-            u[u.length - 1] = { ...u[u.length - 1], lines: [displayedText], visibleLines: 1 } as AssistantMessage
-            return u
-          })
-          setTimeout(typewriterTick, 5)
-        } else {
-          typewriterRunning = false
+      if (!response.ok) throw new Error(`Server error: ${response.status}`)
+      const data = await response.json()
+      
+      const fullResponse = data.response ?? ''
+      const finalData = {
+        has_stl: data.has_stl,
+        stl_url: data.stl_url,
+        step_url: data.step_url,
+        dxf_url: data.dxf_url,
+        conversation_id: data.conversation_id,
+        design_analysis: data.design_analysis,
+      }
+      
+      setCurrentConversationId(data.conversation_id ?? currentConversationId)
+      setConversations(prev => {
+        const exists = prev.find(c => c.id === data.conversation_id)
+        if (!exists && data.conversation_id) {
+          return [{ id: data.conversation_id, title: trimmed.slice(0, 40), time: 'Just now' }, ...prev]
         }
-      }
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done || abortRef.current) break
-        const chunk = decoder.decode(value)
-        const lines = chunk.split('\n')
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          try {
-            const parsed = JSON.parse(line.slice(6))
-            if (parsed.type === 'token') {
-              fullResponse += parsed.content
-              const inBlock = (fullResponse.includes('COMPONENT_REQUEST') && !fullResponse.includes('END_COMPONENT_REQUEST')) ||
-                              (fullResponse.includes('CADQUERY_CODE_START') && !fullResponse.includes('CADQUERY_CODE_END'))
-              const inAssemblyBlock = fullResponse.includes('ASSEMBLY_REQUEST') && !fullResponse.includes('END_ASSEMBLY_REQUEST')
-              if (!inBlock && !inAssemblyBlock) {
-                const cleanedSoFar = fullResponse
-                  .replace(/COMPONENT_REQUEST[\s\S]*?END_COMPONENT_REQUEST/g, '')
-                  .replace(/ASSEMBLY_REQUEST[\s\S]*?END_ASSEMBLY_REQUEST/g, '')
-                  .replace(/CADQUERY_CODE_START[\s\S]*?CADQUERY_CODE_END/g, '')
-                  .replace(/CADQUERY_CODE_START[\s\S]*/g, '')
-                  .trim()
-                const newChars = cleanedSoFar.slice(displayedText.length + pendingText.length)
-                pendingText += newChars
-              }
-              if (!typewriterRunning) {
-                typewriterRunning = true
-                typewriterTick()
-              }
-            } else if (parsed.type === 'conversation_id') {
-              if (parsed.content) {
-                setCurrentConversationId(parsed.content)
-                setConversations(prev => {
-                  const exists = prev.find(c => c.id === parsed.content)
-                  if (exists) return prev
-                  return [{ id: parsed.content, title: trimmed.slice(0, 50), time: 'Just now' }, ...prev]
-                })
-              }
-            } else if (parsed.type === 'done') {
-              finalData = parsed
-              if (parsed.design_analysis) {
-                setDesignAnalysis(parsed.design_analysis)
-              }
-            } else if (parsed.type === 'design_analysis') {
-              if (parsed.design_analysis) {
-                setDesignAnalysis(parsed.design_analysis)
-              }
-            }
-          } catch {}
+        return prev
+      })
+      
+      // Clean response and display with typewriter
+      const cleanedResponse = fullResponse
+        .replace(/COMPONENT_REQUEST[\s\S]*?END_COMPONENT_REQUEST/g, '')
+        .replace(/ASSEMBLY_REQUEST[\s\S]*?END_ASSEMBLY_REQUEST/g, '')
+        .replace(/CADQUERY_CODE_START[\s\S]*?CADQUERY_CODE_END/g, '')
+        .trim()
+      
+      // Typewriter effect
+      const lines = cleanedResponse.split('\n')
+      setMessages(prev => {
+        const u = [...prev]
+        u[u.length - 1] = { role: 'assistant', lines, visibleLines: lines.length } as AssistantMessage
+        return u
+      })
+      
+      if (finalData.design_analysis) setDesignAnalysis(finalData.design_analysis)
+      
+      // Load STL
+      if (finalData.has_stl && finalData.stl_url) {
+        const cadUrls = {
+          stl_url: finalData.stl_url ?? null,
+          step_url: finalData.step_url ?? null,
+          dxf_url: finalData.dxf_url ?? null,
         }
-      }
-
-      // Flush remaining pending text instantly
-      if (pendingText.length > 0) {
-        displayedText += pendingText
-        pendingText = ''
-        setMessages(prev => {
-          const u = [...prev]
-          u[u.length - 1] = { ...u[u.length - 1], lines: [displayedText], visibleLines: 1 } as AssistantMessage
-          return u
-        })
-      }
-
-      const cadUrls: CadUrls = {
-        stl_url: finalData.stl_url ?? null,
-        step_url: finalData.step_url ?? null,
-        dxf_url: finalData.dxf_url ?? null,
-      }
-
-      if (finalData.has_stl) {
         setCurrentCadUrls(cadUrls)
-        setIsGenerating(true)
-        setActiveModel('empty')
-        // Delay viewer until typewriter finishes
-        const charCount = fullResponse.replace(/CADQUERY_CODE_START[\s\S]*?CADQUERY_CODE_END/g, '').length
-        const typewriterDelay = Math.min(charCount * 18, 6000)
-        setTimeout(() => { setViewerOpen(true) }, typewriterDelay)
-        setCurrentStlUrl(finalData.stl_url ?? null)
-        // Extract component type from response
-        const typeMatch = fullResponse.match(/(?:simple\s+)?([\w\s]+?)\s+(?:component|part|solid|block|geometry|is\s+a|—)/i)
-        const dimsMatch = fullResponse.match(/(?:side\s+length|dimensions?|size)[:\s]+([^\n]+)/i) || fullResponse.match(/([\d.]+\s*mm\s*[x×]\s*[\d.]+\s*mm[^\n]*)/i)
-        const materialMatch = fullResponse.match(/(?:AISI|AA|Grade|Aluminum|Steel|Titanium|Brass|Bronze|PEEK|Nylon|Carbon|Glass)[^\n]*/i)
+        setCurrentStlUrl(finalData.stl_url)
         
-        // Try to get component name from first heading
-        const headingMatch = fullResponse.match(/^#\s*([^\n]+)/m) || fullResponse.match(/^([A-Z][\w\s]+)(?:\s*—|\s*\(|\s*component|\s*part)/m)
-        
+        const headingMatch = fullResponse.match(/^#\s*([^\n]+)/m)
+        const materialMatch = fullResponse.match(/(?:AISI|AA|Grade|Aluminum|Steel|Titanium|Brass|Bronze|PEEK|Nylon)[^\n]*/i)
+        const dimsMatch = fullResponse.match(/(?:side\s+length|dimensions?|size)[:\s]+([^\n]+)/i)
         setRealSpecs({
-          type: headingMatch ? headingMatch[1].trim().replace(/^(A|An|The)\s+/i, '') : (typeMatch ? typeMatch[1].trim() : 'Component'),
-          dimensions: dimsMatch ? dimsMatch[1]?.trim() || dimsMatch[0]?.trim() : '',
-          material: materialMatch ? materialMatch[0].trim().split('\n')[0].trim() : 'Steel',
+          type: headingMatch ? headingMatch[1].trim().replace(/^(A|An|The)\s+/i, '') : 'Component',
+          dimensions: dimsMatch ? dimsMatch[1]?.trim() : '',
+          material: materialMatch ? materialMatch[0].trim().split('\n')[0] : 'Steel',
         })
+        
+        const charCount = cleanedResponse.length
+        const delay = Math.min(charCount * 15, 5000)
         setTimeout(() => {
-          setIsGenerating(false)
-          const tl = fullResponse.toLowerCase()
-          let inferred: ModelType = 'cube'
-          if (tl.includes('spur gear'))                           inferred = 'spur_gear'
-          else if (tl.includes('helical'))                        inferred = 'helical_gear'
-          else if (tl.includes('shaft'))                          inferred = 'shaft'
-          else if (tl.includes('bearing'))                        inferred = 'bearing'
-          else if (tl.includes('bolt') || tl.includes('screw'))  inferred = 'bolt'
-          else if (tl.includes('sphere') || tl.includes('ball')) inferred = 'sphere'
-          else if (tl.includes('cylinder'))                       inferred = 'cylinder'
-          else if (tl.includes('rectangle') || tl.includes('box')) inferred = 'rectangle'
-          setActiveModel(inferred)
-        }, 2800)
+          setViewerOpen(true)
+          setIsGenerating(true)
+          setActiveModel('empty')
+          setTimeout(() => {
+            setIsGenerating(false)
+            const tl = fullResponse.toLowerCase()
+            let inferred = 'cube'
+            if (tl.includes('spur gear')) inferred = 'spur_gear'
+            else if (tl.includes('helical')) inferred = 'helical_gear'
+            else if (tl.includes('shaft')) inferred = 'shaft'
+            else if (tl.includes('bearing')) inferred = 'bearing'
+            else if (tl.includes('bolt') || tl.includes('screw')) inferred = 'bolt'
+            else if (tl.includes('sphere')) inferred = 'sphere'
+            else if (tl.includes('cylinder')) inferred = 'cylinder'
+            setActiveModel(inferred as ModelType)
+          }, 2800)
+        }, delay)
+        
         setMessages(prev => {
           const u = [...prev]
           u[u.length - 1] = { ...u[u.length - 1], cadUrls } as AssistantMessage
           return u
         })
       }
-
-    } catch (err) {
+      
+} catch (err) {
       console.error('[MecAI] /chat error:', err)
       setMessages(prev => {
         const u = [...prev]
