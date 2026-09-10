@@ -1023,10 +1023,10 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
           <ToolBtn icon={<RotateCcw size={12} />} label="Reset view"  onClick={handleReset} />
           <ToolBtn icon={<ZoomIn size={12} />}    label="Zoom in"     onClick={() => setZoomDelta(1.5)} />
           <ToolBtn icon={<ZoomOut size={12} />}   label="Zoom out"    onClick={() => setZoomDelta(-1.5)} />
-          <ToolBtn icon={<Box size={12} />}       label="Wireframe"   active={wireframe}   onClick={() => setWireframe(w => !w)} />
+          <ToolBtn icon={<Box size={12} />}       label="Wireframe"   active={wireframe}   onClick={() => { setWireframe(w => !w); if (show2D) setShow2D(false); }} />
           <ToolBtn icon={<Grid3x3 size={12} />}   label="Toggle grid" active={gridVisible} onClick={() => setGrid(g => !g)} />
-          <ToolBtn icon={feaRunning ? <span style={{ fontSize: '8px', fontWeight: 700 }}>...</span> : <Activity size={12} />} label={cadUrls?.step_url ? 'Run stress analysis' : 'Stress analysis — generate a component first'} active={heatmap && !!feaResults} onClick={runFEA} />
-          <ToolBtn icon={<span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '-0.01em', lineHeight: 1 }}>2D</span>} label={cadUrls?.step_url ? 'Engineering drawing' : 'Engineering drawing — generate a component first'} active={show2D} onClick={() => cadUrls?.step_url ? fetchDrawing() : null} />
+          <ToolBtn icon={feaRunning ? <span style={{ fontSize: '8px', fontWeight: 700 }}>...</span> : <Activity size={12} />} label={cadUrls?.step_url ? 'Run stress analysis' : 'Stress analysis — generate a component first'} active={heatmap && !!feaResults} onClick={() => { setShow2D(false); runFEA(); }} />
+          <ToolBtn icon={<span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '-0.01em', lineHeight: 1 }}>2D</span>} label={cadUrls?.step_url ? 'Engineering drawing' : 'Engineering drawing — generate a component first'} active={show2D} onClick={() => { if (cadUrls?.step_url) { setWireframe(false); setHeatmap(false); setFeaResults(null); fetchDrawing(); } }} />
         </div>
 
         <button onClick={onClose}
