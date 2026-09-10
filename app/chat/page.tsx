@@ -545,7 +545,6 @@ export default function ChatPage() {
                   .replace(/COMPONENT_REQUEST[\s\S]*?END_COMPONENT_REQUEST/g, '')
                   .replace(/ASSEMBLY_REQUEST[\s\S]*?END_ASSEMBLY_REQUEST/g, '')
                   .replace(/CADQUERY_CODE_START[\s\S]*?CADQUERY_CODE_END/g, '')
-                  .replace(/CADQUERY_CODE_START[\s\S]*/g, '')
                   .trim()
                 const newChars = cleanedSoFar.slice(displayedText.length + pendingText.length)
                 pendingText += newChars
