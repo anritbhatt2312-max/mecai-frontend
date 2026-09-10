@@ -280,6 +280,7 @@ export default function ChatPage() {
   const [isLoadingChat, setIsLoadingChat] = useState(false)
   const [attachments, setAttachments] = useState<{ file: File; base64: string; mediaType: string }[]>([])
   const [designAnalysis, setDesignAnalysis] = useState<{ warnings: { level: string; category: string; message: string }[]; overall_score: number | null; summary: string } | null>(null)
+  const [designAnalysisCollapsed, setDesignAnalysisCollapsed] = useState(false)
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null)
   const [selectedProject, setSelectedProject] = useState<{ id: string; name: string; owner_id: string; share_token: string; link_permission: string } | null>(null)
   const conversationCache = useRef<Record<string, { messages: ChatMessage[]; stlUrl: string | null; specs: { type: string; dimensions: string; material: string } | null }>>({})
@@ -603,14 +604,18 @@ export default function ChatPage() {
         const typewriterDelay = Math.min(charCount * 18, 6000)
         setTimeout(() => { setViewerOpen(true) }, typewriterDelay)
         setCurrentStlUrl(finalData.stl_url ?? null)
-        const specMatch = fullResponse.match(/type:\s*(.+)/i)
-        const dimsMatch = fullResponse.match(/dimensions?:\s*(.+)/i) || fullResponse.match(/side_length\s*=\s*([\d.]+)/i)
-        const materialMatch = fullResponse.match(/material(?:\s+recommendation)?[:\s]+([A-Za-z0-9\s\-]+)/i)
-        const componentMatch = fullResponse.match(/(?:generating?|create?|design)\s+(?:a\s+)?([\w\s]+?)(?:\s+with|\s+using|\s*[-—]|\.|,|\n)/i)
+        // Extract component type from response
+        const typeMatch = fullResponse.match(/(?:simple\s+)?([\w\s]+?)\s+(?:component|part|solid|block|geometry|is\s+a|—)/i)
+        const dimsMatch = fullResponse.match(/(?:side\s+length|dimensions?|size)[:\s]+([^\n]+)/i) || fullResponse.match(/([\d.]+\s*mm\s*[x×]\s*[\d.]+\s*mm[^\n]*)/i)
+        const materialMatch = fullResponse.match(/(?:AISI|AA|Grade|Aluminum|Steel|Titanium|Brass|Bronze|PEEK|Nylon|Carbon|Glass)[^\n]*/i)
+        
+        // Try to get component name from first heading
+        const headingMatch = fullResponse.match(/^#\s*([^\n]+)/m) || fullResponse.match(/^([A-Z][\w\s]+)(?:\s*—|\s*\(|\s*component|\s*part)/m)
+        
         setRealSpecs({
-          type: specMatch ? specMatch[1].trim() : (componentMatch ? componentMatch[1].trim() : 'Component'),
-          dimensions: dimsMatch ? (dimsMatch[1] || dimsMatch[0]).trim() : '',
-          material: materialMatch ? materialMatch[1].trim().split('\n')[0].trim() : 'Steel',
+          type: headingMatch ? headingMatch[1].trim().replace(/^(A|An|The)\s+/i, '') : (typeMatch ? typeMatch[1].trim() : 'Component'),
+          dimensions: dimsMatch ? dimsMatch[1]?.trim() || dimsMatch[0]?.trim() : '',
+          material: materialMatch ? materialMatch[0].trim().split('\n')[0].trim() : 'Steel',
         })
         setTimeout(() => {
           setIsGenerating(false)
@@ -916,7 +921,7 @@ export default function ChatPage() {
                 </div>
                 <div style={{ padding: '12px 24px 20px', backgroundColor: bg, flexShrink: 0 }}>
                   <div style={{ maxWidth: '700px', margin: '0 auto' }}>
-                    {designAnalysis && designAnalysis.warnings && designAnalysis.warnings.length > 0 && (
+                    {designAnalysis && designAnalysis.warnings && designAnalysis.warnings.length > 0 && realSpecs?.dimensions && (
                       <div style={{ marginBottom: 12, borderRadius: 8, border: `1px solid ${border}`, overflow: 'hidden', background: dm ? 'rgba(255,255,255,0.02)' : '#fafafa' }}>
                         <div style={{ padding: '10px 16px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
