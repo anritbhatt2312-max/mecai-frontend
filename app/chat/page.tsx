@@ -548,17 +548,16 @@ export default function ChatPage() {
         setCurrentCadUrls(cadUrls)
         setCurrentStlUrl(finalData.stl_url)
         
-        // Extract component name - look for bold component name or first heading word
-        const boldMatch = fullResponse.match(/\*\*Component:\*\*\s*([^\n]+)/i) || 
-                          fullResponse.match(/Component:\s*([^\n,]+)/i) ||
-                          fullResponse.match(/^#+\s*([\w\s]+?)(?:\s*[-—(]|\s*Specification|\s*Design|\n)/m)
-        const materialMatch = fullResponse.match(/(?:AISI|AA|Aluminum|Steel|Titanium|Brass|Bronze|PEEK|Nylon)[^\n,]*/i)
-        const dimsMatch = fullResponse.match(/(?:Nominal\s+dimension|dimensions?|size)[:\s]+([^\n,]+)/i) ||
-                          fullResponse.match(/([\d.]+\s*mm\s*[x×\*]\s*[\d.]+\s*mm)/i)
+        const compNameMatch = fullResponse.match(/\*\*Component:\*\*\s*([^\n]+)/i) ||
+                              fullResponse.match(/Component:\s*([^\n,]+)/i) ||
+                              fullResponse.match(/^#+\s*([\w\s]+?)(?:\s*[-—(]|\s*Spec|\n)/m)
+        const compMaterialMatch = fullResponse.match(/(?:AISI|AA|Aluminum|Steel|Titanium|Brass|Bronze|PEEK|Nylon)[^\n,]*/i)
+        const compDimsMatch = fullResponse.match(/(?:Nominal\s+dimension|dimensions?|size)[:\s]+([^\n,]+)/i) ||
+                              fullResponse.match(/([\d.]+\s*mm\s*[x×]\s*[\d.]+\s*mm)/i)
         setRealSpecs({
-          type: boldMatch ? boldMatch[1].trim().replace(/^(A|An|The|Solid|Simple)\s+/i, '') : 'Component',
-          dimensions: dimsMatch ? (dimsMatch[1] || dimsMatch[0]).trim() : '',
-          material: materialMatch ? materialMatch[0].trim().split('\n')[0].replace(/[*]/g,'').trim() : 'Steel',
+          type: compNameMatch ? compNameMatch[1].trim().replace(/^(A|An|The|Solid|Simple)\s+/i, '') : 'Component',
+          dimensions: compDimsMatch ? (compDimsMatch[1] || compDimsMatch[0]).trim() : '',
+          material: compMaterialMatch ? compMaterialMatch[0].trim().split('\n')[0].replace(/[*]/g,'').trim() : 'Steel',
         })
         
         const charCount = cleanedResponse.length
