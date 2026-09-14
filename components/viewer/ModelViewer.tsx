@@ -827,6 +827,7 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          conversation_id: 'fea-' + Date.now(),
           step_url: cadUrls.step_url,
           material: realSpecs?.material ?? 'steel',
           load_magnitude: 1000,
@@ -888,7 +889,7 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
     return () => clearInterval(id)
   }, [isGenerating])
 
-  useEffect(() => { setAutoRotate(false); setWireframe(false); setShow2D(false); setHeatmap(false) }, [modelType])
+  useEffect(() => { setAutoRotate(false); setWireframe(false); setShow2D(false); setHeatmap(false); setDrawingSvg(null); setFeaResults(null) }, [modelType])
 
   useEffect(() => {
     if (pendingModel !== 'empty') setShow2D(true)
