@@ -72,9 +72,9 @@ function RealSTLModel({ url, ar, wireframe, nodeStressMap }: { url: string; ar: 
         let minDist = Infinity
         let nearestStress = 0.5
         for (const node of nodeStressMap) {
-          const dx = tempVec.x - node.x * scale
-          const dy = tempVec.y - node.y * scale
-          const dz = tempVec.z - node.z * scale
+          const dx = tempVec.x - (node.x - center.x) * scale
+          const dy = tempVec.y - (node.y - center.y) * scale
+          const dz = tempVec.z - (node.z - center.z) * scale
           const dist = dx*dx + dy*dy + dz*dz
           if (dist < minDist) { minDist = dist; nearestStress = node.stress }
         }
