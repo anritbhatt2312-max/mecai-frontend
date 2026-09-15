@@ -528,13 +528,29 @@ export default function ChatPage() {
         .replace(/CADQUERY_CODE_START[\s\S]*?CADQUERY_CODE_END/g, '')
         .trim()
       
-      // Typewriter effect
+      // Typewriter effect: reveal lines progressively
       const lines = cleanedResponse.split('\n')
       setMessages(prev => {
         const u = [...prev]
-        u[u.length - 1] = { role: 'assistant', lines, visibleLines: lines.length } as AssistantMessage
+        u[u.length - 1] = { role: 'assistant', lines, visibleLines: 0 } as AssistantMessage
         return u
       })
+      const revealDelay = Math.max(15, Math.min(60, Math.floor(2000 / Math.max(lines.length, 1))))
+      let revealed = 0
+      const revealInterval = setInterval(() => {
+        revealed += 1
+        setMessages(prev => {
+          const u = [...prev]
+          const last = u[u.length - 1]
+          if (last && last.role === 'assistant') {
+            u[u.length - 1] = { ...last, visibleLines: Math.min(revealed, lines.length) } as AssistantMessage
+          }
+          return u
+        })
+        if (revealed >= lines.length) {
+          clearInterval(revealInterval)
+        }
+      }, revealDelay)
       
       if (finalData.design_analysis) setDesignAnalysis(finalData.design_analysis)
       
