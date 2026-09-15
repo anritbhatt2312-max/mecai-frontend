@@ -566,7 +566,7 @@ export default function ChatPage() {
         
         const compNameMatch = fullResponse.match(/\*\*Component:\*\*\s*([^\n]+)/i) ||
                               fullResponse.match(/Component:\s*([^\n,]+)/i) ||
-                              fullResponse.match(/^#+\s*([\w\s]+?)(?:\s*[-—(]|\s*Spec|\n)/m)
+                              fullResponse.match(/^#+\s*([\w\s]+?)(?:\s+[-—]\s|\s*\(|\s*Spec|\n)/m)
         const compMaterialMatch = fullResponse.match(/(?:AISI|AA|Aluminum|Steel|Titanium|Brass|Bronze|PEEK|Nylon)[^\n,]*/i)
         const compDimsMatch = fullResponse.match(/(?:Nominal\s+dimension|dimensions?|size)[:\s]+([^\n,]+)/i) ||
                               fullResponse.match(/([\d.]+\s*mm\s*[x×]\s*[\d.]+\s*mm)/i)
