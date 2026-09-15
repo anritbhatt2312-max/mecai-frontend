@@ -986,7 +986,7 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
   }, [showToast])
 
   const meta = MODEL_META[modelType]
-  const isEmpty = modelType === 'empty' && pendingModel === 'empty'
+  const isEmpty = modelType === 'empty' && pendingModel === 'empty' && !stlUrl
   const hasRealStl = Boolean(stlUrl)
 
   const displaySpecs = useMemo(() => {
