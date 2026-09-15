@@ -529,7 +529,7 @@ export default function ChatPage() {
         .trim()
       
       // Typewriter effect: reveal lines progressively
-      const lines = cleanedResponse.split('\n')
+      const lines = splitLines(cleanedResponse)
       setMessages(prev => {
         const u = [...prev]
         u[u.length - 1] = { role: 'assistant', lines, visibleLines: 0 } as AssistantMessage
