@@ -580,9 +580,12 @@ export default function ChatPage() {
         else if (tlName.includes('sphere')) keywordName = 'Sphere'
         else if (tlName.includes('cylinder')) keywordName = 'Cylinder'
         else if (tlName.includes('cube')) keywordName = 'Cube'
+        let dimsValue = compDimsMatch ? (compDimsMatch[1] || compDimsMatch[0]).trim() : ''
+        dimsValue = dimsValue.replace(/^[*#\-\s:]+/, '').trim()
+        if (!/[0-9]/.test(dimsValue)) dimsValue = ''
         setRealSpecs({
           type: compNameMatch ? compNameMatch[1].trim().replace(/^(A|An|The|Solid|Simple)\s+/i, '') : keywordName,
-          dimensions: compDimsMatch ? (compDimsMatch[1] || compDimsMatch[0]).trim() : '',
+          dimensions: dimsValue,
           material: compMaterialMatch ? compMaterialMatch[0].trim().split('\n')[0].replace(/[*]/g,'').trim() : 'Steel',
         })
         
