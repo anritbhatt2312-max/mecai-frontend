@@ -883,7 +883,7 @@ export default function ChatPage() {
                   <div style={{ maxWidth: '700px', margin: '0 auto' }}>
                     {designAnalysis && designAnalysis.warnings && designAnalysis.warnings.length > 0 && realSpecs?.dimensions && (
                       <div style={{ marginBottom: 12, borderRadius: 8, border: `1px solid ${border}`, overflow: 'hidden', background: dm ? 'rgba(255,255,255,0.02)' : '#fafafa' }}>
-                        <div style={{ padding: '10px 16px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div onClick={() => setDesignAnalysisCollapsed(!designAnalysisCollapsed)} style={{ padding: '10px 16px', borderBottom: designAnalysisCollapsed ? 'none' : `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <div style={{ width: 6, height: 6, borderRadius: '50%', background: designAnalysis.overall_score ? (designAnalysis.overall_score >= 8 ? '#10b981' : designAnalysis.overall_score >= 5 ? '#f59e0b' : '#ef4444') : '#6b7280' }} />
                             <span style={{ fontSize: 10, fontWeight: 600, color: textMuted, fontFamily: F, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Design Review</span>
@@ -898,7 +898,9 @@ export default function ChatPage() {
                               <span style={{ fontSize: 10, fontWeight: 600, color: textMuted, fontFamily: F }}>{designAnalysis.overall_score}/10</span>
                             </div>
                           )}
+                          <span style={{ fontSize: 10, color: textMuted, transform: designAnalysisCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.15s', display: 'inline-block', marginLeft: 8 }}>▾</span>
                         </div>
+                        {!designAnalysisCollapsed && (
                         <div style={{ padding: '10px 16px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                           {designAnalysis.warnings.map((w, i) => (
                             <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 10px', borderRadius: 6, background: w.level === 'critical' ? (dm ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.05)') : w.level === 'warning' ? (dm ? 'rgba(245,158,11,0.08)' : 'rgba(245,158,11,0.05)') : (dm ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.05)'), border: `1px solid ${w.level === 'critical' ? 'rgba(239,68,68,0.2)' : w.level === 'warning' ? 'rgba(245,158,11,0.2)' : 'rgba(16,185,129,0.2)'}` }}>
@@ -913,6 +915,7 @@ export default function ChatPage() {
                             <p style={{ margin: '4px 0 0', fontSize: 11, color: textMuted, fontFamily: F, lineHeight: 1.6 }}>{designAnalysis.summary}</p>
                           )}
                         </div>
+                        )}
                       </div>
                     )}
                     <InputBar {...inputBarProps} placeholder="Ask a follow-up..." />
