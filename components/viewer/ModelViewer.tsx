@@ -1013,7 +1013,7 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 13px', flexShrink: 0, backgroundColor: 'transparent' }}>
         <span style={{ fontSize: '10px', fontWeight: 600, color: '#4a5568', fontFamily: F, letterSpacing: '1.2px', minWidth: '130px', textTransform: 'uppercase' }}>
-          {isGenerating ? `Generating${dots}` : (meta.label || '3D Model Viewer')}
+          {isGenerating ? `Generating${dots}` : ((hasRealStl && realSpecs?.type) ? realSpecs.type : (meta.label || '3D Model Viewer'))}
         </span>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
