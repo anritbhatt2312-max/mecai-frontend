@@ -554,8 +554,18 @@ export default function ChatPage() {
         const compMaterialMatch = fullResponse.match(/(?:AISI|AA|Aluminum|Steel|Titanium|Brass|Bronze|PEEK|Nylon)[^\n,]*/i)
         const compDimsMatch = fullResponse.match(/(?:Nominal\s+dimension|dimensions?|size)[:\s]+([^\n,]+)/i) ||
                               fullResponse.match(/([\d.]+\s*mm\s*[x×]\s*[\d.]+\s*mm)/i)
+        const tlName = fullResponse.toLowerCase()
+        let keywordName = 'Component'
+        if (tlName.includes('spur gear')) keywordName = 'Spur Gear'
+        else if (tlName.includes('helical')) keywordName = 'Helical Gear'
+        else if (tlName.includes('shaft')) keywordName = 'Shaft'
+        else if (tlName.includes('bearing')) keywordName = 'Bearing'
+        else if (tlName.includes('bolt') || tlName.includes('screw')) keywordName = 'Bolt'
+        else if (tlName.includes('sphere')) keywordName = 'Sphere'
+        else if (tlName.includes('cylinder')) keywordName = 'Cylinder'
+        else if (tlName.includes('cube')) keywordName = 'Cube'
         setRealSpecs({
-          type: compNameMatch ? compNameMatch[1].trim().replace(/^(A|An|The|Solid|Simple)\s+/i, '') : 'Component',
+          type: compNameMatch ? compNameMatch[1].trim().replace(/^(A|An|The|Solid|Simple)\s+/i, '') : keywordName,
           dimensions: compDimsMatch ? (compDimsMatch[1] || compDimsMatch[0]).trim() : '',
           material: compMaterialMatch ? compMaterialMatch[0].trim().split('\n')[0].replace(/[*]/g,'').trim() : 'Steel',
         })
