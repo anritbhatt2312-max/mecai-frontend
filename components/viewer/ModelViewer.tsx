@@ -667,8 +667,8 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
             </svg>
           </ToolBtn>
           {/* #7 Stress & Strain Simulation */}
-          <ToolBtn label="Stress & Strain Simulation — coming in V1" active={false} onClick={() => showToast('Stress & Strain simulation — coming in V1')}>
-            <StressIcon />
+          <ToolBtn label={cadUrls?.step_url ? 'Run stress analysis' : 'Stress analysis — generate a component first'} active={heatmap && !!feaResults} onClick={runFEA}>
+            {feaRunning ? <span style={{ fontSize: '8px', fontWeight: 700 }}>...</span> : <StressIcon />}
           </ToolBtn>
         </div>
 
@@ -731,7 +731,7 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
               <pointLight       position={[-4, 2, 2]}  intensity={0.9} color="#c8dcff" />
               <InfiniteGrid visible={gridVisible} />
               {hasRealStl ? (
-                <RealSTLModel url={stlUrl!} ar={autoRotate} wireframe={wireframe} />
+                <RealSTLModel url={stlUrl!} ar={autoRotate} wireframe={wireframe} nodeStressMap={heatmap && feaResults?.node_stress_map ? feaResults.node_stress_map : undefined} />
               ) : (
                 <>
                   {modelType === 'spur_gear'    && <SpurGearModel    ar={autoRotate} wireframe={wireframe} heatmap={heatmap} />}
@@ -755,6 +755,21 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
             </Suspense>
           </Canvas>
         </div>
+
+        {heatmap && feaResults && (
+          <div style={{ position: 'absolute', bottom: '48px', right: '12px', backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: '8px', padding: '10px 14px', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.05)' }}>
+            <div style={{ fontSize: '10px', fontWeight: 700, color: '#63b3ed', fontFamily: F, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '8px' }}>Von Mises Stress</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+              <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: '#ff3b3b', flexShrink: 0 }} />
+              <span style={{ fontSize: '11px', color: '#e5e7eb', fontFamily: F }}>{feaResults.max_stress_mpa.toFixed(1)} MPa</span>
+            </div>
+            <div style={{ width: '120px', height: '6px', borderRadius: '3px', background: 'linear-gradient(to right, #0000ff, #00ff00, #ffff00, #ff3b3b)', margin: '4px 0' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: '#0000ff', flexShrink: 0 }} />
+              <span style={{ fontSize: '11px', color: '#e5e7eb', fontFamily: F }}>{feaResults.min_stress_mpa.toFixed(1)} MPa</span>
+            </div>
+          </div>
+        )}
 
         {toastMessage && (
           <div style={{ position: 'absolute', bottom: 52, left: '50%', transform: 'translateX(-50%)', background: 'rgba(12,20,34,0.97)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '9px 18px', zIndex: 20, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 10, animation: 'fadeSlideUp 0.2s ease' }}>
