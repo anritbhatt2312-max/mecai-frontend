@@ -844,6 +844,7 @@ export default function ChatPage() {
             cadUrls={currentCadUrls}
             stlUrl={currentStlUrl}
             realSpecs={realSpecs}
+            conversationId={currentConversationId}
           />
         </div>
       </div>

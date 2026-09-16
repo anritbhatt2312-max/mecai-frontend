@@ -30,11 +30,20 @@ function matProps(material: string) {
   }
 }
 
-function RealSTLModel({ url, ar, wireframe }: { url: string; ar: boolean; wireframe: boolean }) {
+function stressToColor(stress: number): THREE.Color {
+  const c = new THREE.Color()
+  if (stress < 0.25) c.setRGB(0, stress * 4, 1)
+  else if (stress < 0.5) c.setRGB(0, 1, 1 - (stress - 0.25) * 4)
+  else if (stress < 0.75) c.setRGB((stress - 0.5) * 4, 1, 0)
+  else c.setRGB(1, 1 - (stress - 0.75) * 4, 0)
+  return c
+}
+
+function RealSTLModel({ url, ar, wireframe, nodeStressMap }: { url: string; ar: boolean; wireframe: boolean; nodeStressMap?: { x: number; y: number; z: number; stress: number }[] }) {
   const geometry = useLoader(STLLoader, url)
   const ref = useRef<THREE.Mesh>(null)
   useFrame((_, d) => { if (ref.current && ar) ref.current.rotation.y += d * 0.5 })
-  const mat = useMemo(() => new THREE.MeshStandardMaterial({ ...matProps('steel') }), [])
+  const mat = useMemo(() => new THREE.MeshStandardMaterial({ ...matProps('steel'), vertexColors: !!nodeStressMap }), [nodeStressMap])
   useEffect(() => { mat.wireframe = wireframe; mat.needsUpdate = true }, [mat, wireframe])
   const centeredGeometry = useMemo(() => {
     const geo = geometry.clone()
@@ -48,8 +57,32 @@ function RealSTLModel({ url, ar, wireframe }: { url: string; ar: boolean; wirefr
     const maxDim = Math.max(size.x, size.y, size.z)
     const scale = maxDim > 0 ? 3.0 / maxDim : 1
     geo.scale(scale, scale, scale)
+
+    if (nodeStressMap && nodeStressMap.length > 0) {
+      const positions = geo.attributes.position
+      const colors = new Float32Array(positions.count * 3)
+      const tempVec = new THREE.Vector3()
+      for (let i = 0; i < positions.count; i++) {
+        tempVec.fromBufferAttribute(positions, i)
+        let minDist = Infinity
+        let nearestStress = 0.5
+        for (const node of nodeStressMap) {
+          const dx = tempVec.x - (node.x - center.x) * scale
+          const dy = tempVec.y - (node.y - center.y) * scale
+          const dz = tempVec.z - (node.z - center.z) * scale
+          const dist = dx*dx + dy*dy + dz*dz
+          if (dist < minDist) { minDist = dist; nearestStress = node.stress }
+        }
+        const col = stressToColor(nearestStress)
+        colors[i * 3] = col.r
+        colors[i * 3 + 1] = col.g
+        colors[i * 3 + 2] = col.b
+      }
+      geo.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+    }
+
     return geo
-  }, [geometry])
+  }, [geometry, nodeStressMap])
   return <mesh ref={ref} geometry={centeredGeometry} material={mat} />
 }
 
@@ -350,6 +383,7 @@ export interface ModelViewerProps {
   cadUrls?: CadUrls | null
   stlUrl?: string | null
   realSpecs?: { type: string; dimensions: string; material: string } | null
+  conversationId?: string | null
 }
 
 const DIM_COLOR  = '#1a1a1a'
@@ -481,7 +515,7 @@ function ToolBtn({ children, label, active, onClick }: { children: React.ReactNo
   )
 }
 
-export default function ModelViewer({ onClose, modelType = 'empty', pendingModel = 'empty', isGenerating = false, shapeDims = {}, heatmap: heatmapProp, onHeatmapToggle, cadUrls = null, stlUrl = null, realSpecs = null }: ModelViewerProps) {
+export default function ModelViewer({ onClose, modelType = 'empty', pendingModel = 'empty', isGenerating = false, shapeDims = {}, heatmap: heatmapProp, onHeatmapToggle, cadUrls = null, stlUrl = null, realSpecs = null, conversationId = null }: ModelViewerProps) {
   const [wireframe, setWireframe] = useState(false)
   const [heatmap, setHeatmap]     = useState(false)
   useEffect(() => { if (heatmapProp !== undefined) setHeatmap(heatmapProp) }, [heatmapProp])
@@ -491,8 +525,39 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
   const [zoomDelta, setZoomDelta] = useState(0)
   const [dots, setDots]           = useState('.')
   const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const [feaResults, setFeaResults] = useState<{ max_stress_mpa: number; min_stress_mpa: number; node_stress_map?: { x: number; y: number; z: number; stress: number }[] } | null>(null)
+  const [feaRunning, setFeaRunning] = useState(false)
   const controlsRef = useRef<any>(null)
   const sceneRef    = useRef<THREE.Scene | null>(null)
+
+  const runFEA = async () => {
+    if (!cadUrls?.step_url || feaRunning) return
+    setFeaRunning(true)
+    try {
+      const res = await fetch('https://web-production-9f493.up.railway.app/fea/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversation_id: conversationId ?? 'unknown',
+          step_url: cadUrls.step_url,
+          material: realSpecs?.material ?? 'steel',
+          load_magnitude: 1000,
+          load_direction: 'z',
+        }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setFeaResults({ max_stress_mpa: data.max_stress_mpa, min_stress_mpa: data.min_stress_mpa, node_stress_map: data.node_stress_map })
+        setHeatmap(true)
+      } else {
+        showToast('Stress analysis failed — try again')
+      }
+    } catch (e) {
+      showToast('Stress analysis failed — try again')
+    } finally {
+      setFeaRunning(false)
+    }
+  }
 
   useEffect(() => {
     if (!isGenerating) return
