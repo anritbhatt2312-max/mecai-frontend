@@ -628,7 +628,7 @@ export default function ChatPage() {
     } finally {
       setIsStreaming(false)
     }
-  }, [isStreaming, session, currentConversationId])
+  }, [isStreaming, session, currentConversationId, currentProjectId])
   const stopStreaming = useCallback(() => { abortRef.current = true; setIsStreaming(false) }, [])
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input) }
