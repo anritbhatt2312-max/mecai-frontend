@@ -384,6 +384,7 @@ export interface ModelViewerProps {
   stlUrl?: string | null
   realSpecs?: { type: string; dimensions: string; material: string } | null
   conversationId?: string | null
+  onSaveToLibrary?: (name: string, stlUrl: string | null, cadUrls: CadUrls | null, modelType: string) => void
 }
 
 const DIM_COLOR  = '#1a1a1a'
@@ -515,7 +516,7 @@ function ToolBtn({ children, label, active, onClick }: { children: React.ReactNo
   )
 }
 
-export default function ModelViewer({ onClose, modelType = 'empty', pendingModel = 'empty', isGenerating = false, shapeDims = {}, heatmap: heatmapProp, onHeatmapToggle, cadUrls = null, stlUrl = null, realSpecs = null, conversationId = null }: ModelViewerProps) {
+export default function ModelViewer({ onClose, modelType = 'empty', pendingModel = 'empty', isGenerating = false, shapeDims = {}, heatmap: heatmapProp, onHeatmapToggle, cadUrls = null, stlUrl = null, realSpecs = null, conversationId = null, onSaveToLibrary }: ModelViewerProps) {
   const [wireframe, setWireframe] = useState(false)
   const [heatmap, setHeatmap]     = useState(false)
   useEffect(() => { if (heatmapProp !== undefined) setHeatmap(heatmapProp) }, [heatmapProp])
@@ -679,8 +680,8 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
         </span>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-          <ToolBtn label="Save spec (JSON)" onClick={handleSave}><Save size={12} /></ToolBtn>
-          <ToolBtn label="Export PNG"       onClick={handleExport}><Download size={12} /></ToolBtn>
+          <ToolBtn label="Save to Library" onClick={() => { onSaveToLibrary?.(realSpecs?.type || meta.label || 'Saved Model', cadUrls?.stl_url ?? stlUrl ?? null, cadUrls, modelType); showToast('Saved to library') }}><Save size={12} /></ToolBtn>
+          <ToolBtn label="Save spec (JSON)" onClick={handleSave}><Download size={12} /></ToolBtn>
           <ToolBtn label="Export STL"       onClick={handleExportSTL}><span style={{ fontSize: '9px', fontWeight: 700, lineHeight: 1 }}>STL</span></ToolBtn>
           <ToolBtn label={cadUrls?.step_url ? 'Export STEP' : 'Export STEP — coming soon'} onClick={handleExportSTEP}><span style={{ fontSize: '9px', fontWeight: 700, lineHeight: 1 }}>STP</span></ToolBtn>
           <ToolBtn label={cadUrls?.dxf_url ? 'Export DXF' : 'Export DXF — coming soon'} onClick={handleExportDXF}><span style={{ fontSize: '9px', fontWeight: 700, lineHeight: 1 }}>DXF</span></ToolBtn>
@@ -817,8 +818,7 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
 
         {toastMessage && (
           <div style={{ position: 'absolute', bottom: 52, left: '50%', transform: 'translateX(-50%)', background: 'rgba(12,20,34,0.97)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '9px 18px', zIndex: 20, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 10, animation: 'fadeSlideUp 0.2s ease' }}>
-            <span style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', fontFamily: F, letterSpacing: '0.1em', textTransform: 'uppercase' }}>COMING SOON</span>
-            <span style={{ fontSize: 11, color: '#94a3b8', fontFamily: F }}>{toastMessage}</span>
+            <span style={{ fontSize: 11, color: '#e5e7eb', fontFamily: F }}>{toastMessage}</span>
           </div>
         )}
 

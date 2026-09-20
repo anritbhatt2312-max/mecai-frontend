@@ -467,8 +467,9 @@ export default function ChatPage() {
         setCurrentStlUrl(lastStlMessage.stl_url ?? null)
         setViewerOpen(true)
         setActiveModel('cube')
+        const extractedName = compNameMatch ? compNameMatch[1].trim().replace(/^(A|An|The|Solid|Simple)\s+/i, '') : ''
         setRealSpecs({
-          type: compNameMatch ? compNameMatch[1].trim().replace(/^(A|An|The|Solid|Simple)\s+/i, '') : keywordName,
+          type: (extractedName && !isGenericHeading(extractedName)) ? extractedName : keywordName,
           dimensions: dimsValue,
           material: compMaterialMatch ? compMaterialMatch[0].trim().split('\n')[0].replace(/[*]/g,'').trim() : 'Steel',
         })
@@ -551,6 +552,9 @@ export default function ChatPage() {
     return words.length > 40 ? words.slice(0, 40) + '…' : words
   }
 
+  const GENERIC_HEADINGS = ['design parameters', 'design specification', 'design specifications', 'specifications', 'specification', 'overview', 'geometry', 'calculated geometry', 'calculated dimensions', 'key calculated dimensions', 'material recommendation', 'materials', 'parameters']
+  const isGenericHeading = (name: string) => GENERIC_HEADINGS.includes(name.trim().toLowerCase())
+
   const sendMessage = useCallback(async (text: string) => {
     const trimmed = text.trim()
     if (!trimmed || isStreaming) return
@@ -630,8 +634,9 @@ export default function ChatPage() {
         let dimsValue = compDimsMatch ? (compDimsMatch[1] || compDimsMatch[0]).trim() : ''
         dimsValue = dimsValue.replace(/^[*#\-\s:]+/, '').trim()
         if (!/[0-9]/.test(dimsValue)) dimsValue = ''
+        const extractedName = compNameMatch ? compNameMatch[1].trim().replace(/^(A|An|The|Solid|Simple)\s+/i, '') : ''
         setRealSpecs({
-          type: compNameMatch ? compNameMatch[1].trim().replace(/^(A|An|The|Solid|Simple)\s+/i, '') : keywordName,
+          type: (extractedName && !isGenericHeading(extractedName)) ? extractedName : keywordName,
           dimensions: dimsValue,
           material: compMaterialMatch ? compMaterialMatch[0].trim().split('\n')[0].replace(/[*]/g,'').trim() : 'Steel',
         })
@@ -915,6 +920,7 @@ export default function ChatPage() {
             stlUrl={currentStlUrl}
             realSpecs={realSpecs}
             conversationId={currentConversationId}
+            onSaveToLibrary={saveToLibrary}
           />
         </div>
       </div>
@@ -1176,6 +1182,7 @@ export default function ChatPage() {
                 realSpecs={realSpecs}
                 cadUrls={currentCadUrls}
                 shapeDimensions={shapeDims}
+                onSaveToLibrary={saveToLibrary}
               />
             </div>
           </div>
