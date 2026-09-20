@@ -5,6 +5,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import LoginTransition from '@/components/LoginTransition'
 import ProjectsPage from '@/components/ProjectsPage'
+import ProjectView from '@/components/ProjectView'
 import { useSmartSuggestions, trackMessage } from '@/hooks/useSmartSuggestions'
 import { ArrowUp, X, Search, StopCircle, Download, Plus, Copy, RotateCcw, Pencil, ChevronDown, Sun, Moon, AlertCircle, RefreshCw, ThumbsUp, ThumbsDown, Trash2 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
@@ -246,6 +247,8 @@ export default function ChatPage() {
   const [isDragging, setIsDragging] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [page, setPage] = useState<'home' | 'projects'>('home')
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null)
+  const [selectedProject, setSelectedProject] = useState<{ id: string; name: string; owner_id: string; share_token: string; link_permission: string } | null>(null)
   const [themePreference, setThemePreference] = useState<ThemePreference>('system')
   const [systemDark, setSystemDark] = useState(false)
   const [mounted, setMounted] = useState(false)
@@ -391,7 +394,8 @@ export default function ChatPage() {
     if (!session?.user?.id) return
     fetch(`${CONVERSATIONS_API}/${session.user.id}`)
       .then(r => r.ok ? r.json() : [])
-      .then((data: Conversation[]) => {
+      .then((res: { conversations: Conversation[] } | Conversation[]) => {
+        const data = Array.isArray(res) ? res : (res as { conversations: Conversation[] }).conversations ?? []
         if (!Array.isArray(data)) return
         const formatted = data.map(c => ({
           id: c.id,
@@ -417,17 +421,61 @@ export default function ChatPage() {
   }
 
   const loadConversation = useCallback(async (conversationId: string) => {
+    setPage('home')
     if (!session?.user?.id) return
     try {
-      const res = await fetch(`${CONVERSATIONS_API}/${session.user.id}/${conversationId}`)
+      const res = await fetch(`${CONVERSATIONS_API}/${conversationId}/messages`)
       if (!res.ok) return
       const data = await res.json()
       if (!Array.isArray(data.messages)) return
-      const loaded: ChatMessage[] = data.messages.map((m: { role: string; content: string }) => ({
-        role: m.role as 'user' | 'assistant',
-        lines: m.role === 'assistant' ? splitLines(m.content) : [m.content],
-        visibleLines: m.role === 'assistant' ? splitLines(m.content).length : 1,
-      }))
+      const loaded: ChatMessage[] = data.messages.map((m: { role: string; content: string }) => {
+        const content = m.role === 'assistant'
+          ? (m.content ?? '').replace(/COMPONENT_REQUEST[\s\S]*?END_COMPONENT_REQUEST/g, '').replace(/ASSEMBLY_REQUEST[\s\S]*?END_ASSEMBLY_REQUEST/g, '').replace(/CADQUERY_CODE_START[\s\S]*?CADQUERY_CODE_END/g, '').trim()
+          : m.content
+        return {
+          role: m.role as 'user' | 'assistant',
+          lines: m.role === 'assistant' ? splitLines(content) : [content],
+          visibleLines: m.role === 'assistant' ? splitLines(content).length : 1,
+        }
+      })
+      const rawMessages = data.messages as { role: string; content: string; has_stl?: boolean; stl_url?: string; step_url?: string }[]
+      const lastStlMessage = [...rawMessages].reverse().find((m) => m.has_stl && m.stl_url)
+      if (lastStlMessage) {
+        const fullResponse = lastStlMessage.content ?? ''
+        const compNameMatch = fullResponse.match(/\*\*Component:\*\*\s*([^\n]+)/i) ||
+                              fullResponse.match(/Component:\s*([^\n,]+)/i) ||
+                              fullResponse.match(/^#+\s*([\w\s]+?)(?:\s+[-—]\s|\s*\(|\s*Spec|\n)/m) ||
+                              fullResponse.match(/^(?:A|An|The)\s+([a-zA-Z][a-zA-Z0-9 \-]*?)\s+(?:is|are|consists of|has|contains)\b/i)
+        const compMaterialMatch = fullResponse.match(/(?:AISI|AA|Aluminum|Steel|Titanium|Brass|Bronze|PEEK|Nylon|Polypropylene|ABS|Acetal|POM)[^\n,]*/i)
+        const compDimsMatch = fullResponse.match(/(?:Nominal\s+dimension|dimensions?|size)[:\s]+([^\n,]+)/i) ||
+                              fullResponse.match(/([\d.]+\s*mm\s*[x×]\s*[\d.]+\s*mm)/i)
+        const tlName = fullResponse.toLowerCase()
+        let keywordName = 'Component'
+        if (tlName.includes('spur gear')) keywordName = 'Spur Gear'
+        else if (tlName.includes('helical')) keywordName = 'Helical Gear'
+        else if (tlName.includes('shaft')) keywordName = 'Shaft'
+        else if (tlName.includes('bearing')) keywordName = 'Bearing'
+        else if (tlName.includes('bolt') || tlName.includes('screw')) keywordName = 'Bolt'
+        else if (tlName.includes('sphere')) keywordName = 'Sphere'
+        else if (tlName.includes('cylinder')) keywordName = 'Cylinder'
+        else if (tlName.includes('rectangle') || tlName.includes('box')) keywordName = 'Rectangular Box'
+        else if (tlName.includes('cube')) keywordName = 'Cube'
+        let dimsValue = compDimsMatch ? (compDimsMatch[1] || compDimsMatch[0]).trim() : ''
+        dimsValue = dimsValue.replace(/^[*#\-\s:]+/, '').trim()
+        if (!/[0-9]/.test(dimsValue)) dimsValue = ''
+        setCurrentCadUrls({ stl_url: lastStlMessage.stl_url ?? null, step_url: lastStlMessage.step_url ?? null, dxf_url: null })
+        setCurrentStlUrl(lastStlMessage.stl_url ?? null)
+        setViewerOpen(true)
+        setActiveModel('cube')
+        setRealSpecs({
+          type: compNameMatch ? compNameMatch[1].trim().replace(/^(A|An|The|Solid|Simple)\s+/i, '') : keywordName,
+          dimensions: dimsValue,
+          material: compMaterialMatch ? compMaterialMatch[0].trim().split('\n')[0].replace(/[*]/g,'').trim() : 'Steel',
+        })
+      } else {
+        setCurrentStlUrl(null)
+        setRealSpecs(null)
+      }
       setMessages(loaded)
       setCurrentConversationId(conversationId)
       setChatKey(k => k + 1)
@@ -524,6 +572,7 @@ export default function ChatPage() {
           messages: [{ role: 'user', content: trimmed }],
           user_id: session?.user?.id ?? 'anonymous',
           conversation_id: currentConversationId,
+          project_id: currentProjectId,
         }),
       })
 
@@ -540,7 +589,9 @@ export default function ChatPage() {
         })
       }
 
-      const lines = splitLines(data.response ?? 'No response received.')
+      const rawResponse = data.response ?? 'No response received.'
+      const displayResponse = rawResponse.includes('CADQUERY_CODE_START') ? rawResponse.split('CADQUERY_CODE_START')[0].trim() : rawResponse
+      const lines = splitLines(displayResponse)
 
       const cadUrls: CadUrls = {
         stl_url:  data.stl_url  ?? null,
@@ -557,13 +608,32 @@ export default function ChatPage() {
         setIsGenerating(true)
         setActiveModel('empty')
         setCurrentStlUrl(data.stl_url ?? null)
-        const specMatch = data.response.match(/type:\s*(.+)/i)
-        const dimsMatch = data.response.match(/dimensions:\s*(.+)/i)
-        const materialMatch = data.response.match(/material:\s*(.+)/i)
+        const fullResponse = data.response ?? ''
+        const compNameMatch = fullResponse.match(/\*\*Component:\*\*\s*([^\n]+)/i) ||
+                              fullResponse.match(/Component:\s*([^\n,]+)/i) ||
+                              fullResponse.match(/^#+\s*([\w\s]+?)(?:\s+[-—]\s|\s*\(|\s*Spec|\n)/m) ||
+                              fullResponse.match(/^(?:A|An|The)\s+([a-zA-Z][a-zA-Z0-9 \-]*?)\s+(?:is|are|consists of|has|contains)\b/i)
+        const compMaterialMatch = fullResponse.match(/(?:AISI|AA|Aluminum|Steel|Titanium|Brass|Bronze|PEEK|Nylon|Polypropylene|ABS|Acetal|POM)[^\n,]*/i)
+        const compDimsMatch = fullResponse.match(/(?:Nominal\s+dimension|dimensions?|size)[:\s]+([^\n,]+)/i) ||
+                              fullResponse.match(/([\d.]+\s*mm\s*[x×]\s*[\d.]+\s*mm)/i)
+        const tlName = fullResponse.toLowerCase()
+        let keywordName = 'Component'
+        if (tlName.includes('spur gear')) keywordName = 'Spur Gear'
+        else if (tlName.includes('helical')) keywordName = 'Helical Gear'
+        else if (tlName.includes('shaft')) keywordName = 'Shaft'
+        else if (tlName.includes('bearing')) keywordName = 'Bearing'
+        else if (tlName.includes('bolt') || tlName.includes('screw')) keywordName = 'Bolt'
+        else if (tlName.includes('sphere')) keywordName = 'Sphere'
+        else if (tlName.includes('cylinder')) keywordName = 'Cylinder'
+        else if (tlName.includes('rectangle') || tlName.includes('box')) keywordName = 'Rectangular Box'
+        else if (tlName.includes('cube')) keywordName = 'Cube'
+        let dimsValue = compDimsMatch ? (compDimsMatch[1] || compDimsMatch[0]).trim() : ''
+        dimsValue = dimsValue.replace(/^[*#\-\s:]+/, '').trim()
+        if (!/[0-9]/.test(dimsValue)) dimsValue = ''
         setRealSpecs({
-          type: specMatch ? specMatch[1].trim() : '',
-          dimensions: dimsMatch ? dimsMatch[1].trim() : '',
-          material: materialMatch ? materialMatch[1].trim() : '',
+          type: compNameMatch ? compNameMatch[1].trim().replace(/^(A|An|The|Solid|Simple)\s+/i, '') : keywordName,
+          dimensions: dimsValue,
+          material: compMaterialMatch ? compMaterialMatch[0].trim().split('\n')[0].replace(/[*]/g,'').trim() : 'Steel',
         })
         setTimeout(() => {
           setIsGenerating(false)
@@ -630,7 +700,7 @@ export default function ChatPage() {
     } finally {
       setIsStreaming(false)
     }
-  }, [isStreaming, session, currentConversationId])
+  }, [isStreaming, session, currentConversationId, currentProjectId])
 
   const stopStreaming = useCallback(() => { abortRef.current = true; setIsStreaming(false) }, [])
 
@@ -788,11 +858,11 @@ export default function ChatPage() {
             if (currentConversationId === id) { setChatKey(k => k + 1); setCurrentConversationId(null) }
           }}
           onStarChat={(id) => {
-            setConversations(prev => {
-              const starred = prev.find(c => c.id === id)
-              if (!starred) return prev
-              return [{ ...starred, title: `★ ${starred.title.replace(/^★ /, '')}` }, ...prev.filter(c => c.id !== id)]
-            })
+            setConversations(prev => prev.map(c => {
+              if (c.id !== id) return c
+              const isStarred = c.title.startsWith('★ ')
+              return { ...c, title: isStarred ? c.title.replace(/^★ /, '') : `★ ${c.title}` }
+            }))
           }}
         />
       )}
@@ -1045,9 +1115,33 @@ export default function ChatPage() {
           </div>
         )}
 
-        {page === 'projects' && (
-          <ProjectsPage darkMode={dm} textPrimary={textPrimary} textMuted={textMuted} border={border} bg={bg} />
-        )}
+        {page === 'projects' && !selectedProject && (
+            <ProjectsPage
+              darkMode={dm} textPrimary={textPrimary} textMuted={textMuted} border={border} bg={bg}
+              onSelectProject={(project) => setSelectedProject(project)}
+            />
+          )}
+          {page === 'projects' && selectedProject && (
+            <ProjectView
+              project={selectedProject}
+              darkMode={dm} textPrimary={textPrimary} textMuted={textMuted} border={border} bg={bg}
+              onBack={() => setSelectedProject(null)}
+              onSelectChat={(conversationId) => {
+                setPage('home')
+                setSelectedProject(null)
+                loadConversation(conversationId)
+              }}
+              onNewChat={(projectId) => {
+                setPage('home')
+                setSelectedProject(null)
+                setCurrentProjectId(projectId)
+                setCurrentConversationId(null)
+                setMessages([])
+                setViewerOpen(false)
+                setActiveModel('empty')
+              }}
+            />
+          )}
       </main>
 
       {/* #2 Global copy toast */}

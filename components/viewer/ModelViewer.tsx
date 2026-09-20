@@ -519,9 +519,11 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
   const [wireframe, setWireframe] = useState(false)
   const [heatmap, setHeatmap]     = useState(false)
   useEffect(() => { if (heatmapProp !== undefined) setHeatmap(heatmapProp) }, [heatmapProp])
-  const [gridVisible, setGrid]    = useState(true)
+  const [gridVisible, setGrid]    = useState(false)
   const [autoRotate, setAutoRotate] = useState(false)
   const [show2D, setShow2D]       = useState(false)
+  const [drawingSvg, setDrawingSvg] = useState<string | null>(null)
+  const [drawingLoading, setDrawingLoading] = useState(false)
   const [zoomDelta, setZoomDelta] = useState(0)
   const [dots, setDots]           = useState('.')
   const [toastMessage, setToastMessage] = useState<string | null>(null)
@@ -559,6 +561,32 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
     }
   }
 
+  const fetchDrawing = async () => {
+    if (!cadUrls?.step_url || drawingLoading) return
+    setDrawingLoading(true)
+    try {
+      const res = await fetch('https://web-production-9f493.up.railway.app/fea/drawing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          step_url: cadUrls.step_url,
+          component_name: realSpecs?.type || 'Component',
+          material: realSpecs?.material || 'Steel',
+        }),
+      })
+      if (res.ok) {
+        const svgText = await res.text()
+        setDrawingSvg(svgText)
+      } else {
+        showToast('2D drawing generation failed — try again')
+      }
+    } catch (e) {
+      showToast('2D drawing generation failed — try again')
+    } finally {
+      setDrawingLoading(false)
+    }
+  }
+
   useEffect(() => {
     if (!isGenerating) return
     const id = setInterval(() => setDots(d => d.length >= 3 ? '.' : d + '.'), 500)
@@ -566,6 +594,7 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
   }, [isGenerating])
 
   useEffect(() => { setAutoRotate(false); setWireframe(false); setShow2D(false); setHeatmap(false) }, [modelType])
+  useEffect(() => { setDrawingSvg(null); setFeaResults(null) }, [stlUrl])
   useEffect(() => { if (pendingModel !== 'empty') setShow2D(true); else setShow2D(false) }, [pendingModel])
 
   const showToast = useCallback((message: string) => {
@@ -646,7 +675,7 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 13px', flexShrink: 0 }}>
         <span style={{ fontSize: '10px', fontWeight: 600, color: '#4a5568', fontFamily: F, letterSpacing: '1.2px', minWidth: '130px', textTransform: 'uppercase' }}>
-          {isGenerating ? `Generating${dots}` : (meta.label || '3D Model Viewer')}
+          {isGenerating ? `Generating${dots}` : ((hasRealStl && realSpecs?.type) ? realSpecs.type : (meta.label || '3D Model Viewer'))}
         </span>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
@@ -659,7 +688,7 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
           <ToolBtn label="Zoom in"      onClick={() => setZoomDelta(1.5)}><ZoomIn size={12} /></ToolBtn>
           <ToolBtn label="Zoom out"     onClick={() => setZoomDelta(-1.5)}><ZoomOut size={12} /></ToolBtn>
           <ToolBtn label="Toggle grid"  active={gridVisible} onClick={() => setGrid(g => !g)}><Grid3x3 size={12} /></ToolBtn>
-          <ToolBtn label="2D Drawing" active={show2D} onClick={() => setShow2D(s => !s)}>
+          <ToolBtn label="2D Drawing" active={show2D} onClick={() => { const next = !show2D; setShow2D(next); if (next && hasRealStl && cadUrls?.step_url && !drawingSvg) fetchDrawing() }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="3" width="18" height="18" rx="1"/>
               <line x1="3" y1="9" x2="21" y2="9"/>
@@ -667,7 +696,11 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
             </svg>
           </ToolBtn>
           {/* #7 Stress & Strain Simulation */}
-          <ToolBtn label={cadUrls?.step_url ? 'Run stress analysis' : 'Stress analysis — generate a component first'} active={heatmap && !!feaResults} onClick={runFEA}>
+          <ToolBtn label={cadUrls?.step_url ? (heatmap && feaResults ? 'Back to normal view' : 'Run stress analysis') : 'Stress analysis — generate a component first'} active={heatmap && !!feaResults} onClick={() => {
+            if (heatmap && feaResults) setHeatmap(false)
+            else if (feaResults) setHeatmap(true)
+            else runFEA()
+          }}>
             {feaRunning ? <span style={{ fontSize: '8px', fontWeight: 700 }}>...</span> : <StressIcon />}
           </ToolBtn>
         </div>
@@ -707,7 +740,18 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
           </div>
         )}
 
-        {show2D && (modelType !== 'empty' || pendingModel !== 'empty') && (
+        {show2D && hasRealStl && (
+          <div style={{ position: 'absolute', inset: 0, zIndex: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#080e1a', overflow: 'auto' }}>
+            {drawingLoading ? (
+              <span style={{ fontSize: '11px', color: '#4a5568', fontFamily: F, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Generating drawing…</span>
+            ) : drawingSvg ? (
+              <div style={{ maxWidth: '90%', maxHeight: '90%' }} dangerouslySetInnerHTML={{ __html: drawingSvg }} />
+            ) : (
+              <span style={{ fontSize: '11px', color: '#4a5568', fontFamily: F }}>No drawing available</span>
+            )}
+          </div>
+        )}
+        {show2D && !hasRealStl && (modelType !== 'empty' || pendingModel !== 'empty') && (
           <div style={{ position: 'absolute', inset: 0, zIndex: 6 }}>
             <Drawing2D
               modelType={pendingModel !== 'empty' ? pendingModel : modelType}
@@ -757,7 +801,7 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
         </div>
 
         {heatmap && feaResults && (
-          <div style={{ position: 'absolute', bottom: '48px', right: '12px', backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: '8px', padding: '10px 14px', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.05)' }}>
+          <div style={{ position: 'absolute', top: '60px', right: '12px', backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: '8px', padding: '10px 14px', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.05)' }}>
             <div style={{ fontSize: '10px', fontWeight: 700, color: '#63b3ed', fontFamily: F, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '8px' }}>Von Mises Stress</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
               <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: '#ff3b3b', flexShrink: 0 }} />
@@ -778,7 +822,28 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
           </div>
         )}
 
-        {displaySpecs.length > 0 && !isGenerating && (
+        {hasRealStl && realSpecs && !isGenerating && (
+          <div style={{ position: 'absolute', bottom: '48px', left: '12px', backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: '8px', padding: '8px 12px', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.05)' }}>
+            {realSpecs.material && (
+              <div style={{ marginBottom: '6px', paddingBottom: '5px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                <span style={{ fontSize: '9px', color: '#63b3ed', fontFamily: F, fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{realSpecs.material}</span>
+              </div>
+            )}
+            {realSpecs.type && (
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '2px' }}>
+                <span style={{ fontSize: '10px', color: '#374151', fontFamily: F, width: '76px' }}>Type</span>
+                <span style={{ fontSize: '10px', color: '#94a3b8', fontFamily: F, fontWeight: 500 }}>{realSpecs.type}</span>
+              </div>
+            )}
+            {realSpecs.dimensions && (
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '2px' }}>
+                <span style={{ fontSize: '10px', color: '#374151', fontFamily: F, width: '76px' }}>Dimensions</span>
+                <span style={{ fontSize: '10px', color: '#94a3b8', fontFamily: F, fontWeight: 500 }}>{realSpecs.dimensions}</span>
+              </div>
+            )}
+          </div>
+        )}
+        {displaySpecs.length > 0 && !isGenerating && !hasRealStl && (
           <div style={{ position: 'absolute', bottom: '48px', left: '12px', backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: '8px', padding: '8px 12px', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.05)' }}>
             {meta.material && (
               <div style={{ marginBottom: '6px', paddingBottom: '5px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
