@@ -22,7 +22,7 @@ interface Conversation {
   updated_at: string
 }
 
-interface Message { role: 'user' | 'assistant'; lines: string[]; visibleLines: number; displayedText?: string }
+interface Message { role: 'user' | 'assistant'; lines: string[]; visibleLines: number; displayedText?: string; attachments?: { name: string; mediaType: string; previewUrl: string }[] }
 
 interface CadUrls {
   stl_url: string | null
@@ -142,18 +142,54 @@ interface InputBarProps {
   textMuted: string
   darkMode: boolean
   textareaRef: React.RefObject<HTMLTextAreaElement>
+  attachments: { name: string; mediaType: string; base64: string; previewUrl: string }[]
+  onAttachClick: () => void
+  onRemoveAttachment: (index: number) => void
+  fileInputRef: React.RefObject<HTMLInputElement>
+  onFileSelected: (e: React.ChangeEvent<HTMLInputElement>) => void
 }
 
-function InputBar({ input, onChange, onKeyDown, onSend, onStop, isStreaming, placeholder, disclaimer, textPrimary, textMuted, darkMode, textareaRef }: InputBarProps) {
+function InputBar({ input, onChange, onKeyDown, onSend, onStop, isStreaming, placeholder, disclaimer, textPrimary, textMuted, darkMode, textareaRef, attachments, onAttachClick, onRemoveAttachment, fileInputRef, onFileSelected }: InputBarProps) {
   return (
     <div style={{ width: '100%' }}>
+      {attachments.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
+          {attachments.map((att, i) => (
+            <div key={i} style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              backgroundColor: darkMode ? '#252d3a' : '#f2f2f2',
+              border: `1px solid ${darkMode ? '#2e3847' : '#e0e0e0'}`,
+              borderRadius: '8px', padding: '4px 8px', fontSize: '12px',
+              color: textPrimary, fontFamily: F, maxWidth: '180px',
+            }}>
+              {att.previewUrl ? (
+                <img src={att.previewUrl} alt={att.name} style={{ width: '18px', height: '18px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0 }} />
+              ) : (
+                <span style={{ flexShrink: 0 }}>{'\ud83d\udcc4'}</span>
+              )}
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{att.name}</span>
+              <button onClick={() => onRemoveAttachment(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: textMuted, padding: 0, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                <X size={12} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
       <div style={{
         display: 'flex', alignItems: 'center', gap: '10px',
         backgroundColor: darkMode ? '#252d3a' : '#f2f2f2',
         border: `1px solid ${darkMode ? '#2e3847' : '#e0e0e0'}`,
         borderRadius: '12px', padding: '10px 12px 10px 10px',
       }}>
-        <button title="Attach file" style={{ width: '28px', height: '28px', borderRadius: '7px', border: 'none', backgroundColor: 'transparent', color: darkMode ? '#ffffff' : '#000000', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, transition: 'color 0.15s, background 0.15s' }}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,application/pdf"
+          multiple
+          onChange={onFileSelected}
+          style={{ display: 'none' }}
+        />
+        <button title="Attach file" onClick={onAttachClick} style={{ width: '28px', height: '28px', borderRadius: '7px', border: 'none', backgroundColor: 'transparent', color: darkMode ? '#ffffff' : '#000000', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, transition: 'color 0.15s, background 0.15s' }}
           onMouseEnter={e => { e.currentTarget.style.backgroundColor = darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }}
           onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent' }}>
           <Plus size={18} strokeWidth={2.5} />
@@ -307,6 +343,8 @@ export default function ChatPage() {
   const [chatKey, setChatKey] = useState(0)
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null)
   const [conversations, setConversations] = useState<{ id: string; title: string; time: string }[]>([])
+  const [attachments, setAttachments] = useState<{ name: string; mediaType: string; base64: string; previewUrl: string }[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const { cards: promptCards, isPersonalised } = useSmartSuggestions()
 
@@ -555,12 +593,42 @@ export default function ChatPage() {
   const GENERIC_HEADINGS = ['design parameters', 'design specification', 'design specifications', 'specifications', 'specification', 'overview', 'geometry', 'calculated geometry', 'calculated dimensions', 'key calculated dimensions', 'material recommendation', 'materials', 'parameters']
   const isGenericHeading = (name: string) => GENERIC_HEADINGS.includes(name.trim().toLowerCase())
 
+  const MAX_ATTACHMENT_MB = 10
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+    Array.from(files).forEach(file => {
+      if (file.size > MAX_ATTACHMENT_MB * 1024 * 1024) {
+        alert(`${file.name} is over ${MAX_ATTACHMENT_MB}MB and won't be attached.`)
+        return
+      }
+      const reader = new FileReader()
+      reader.onload = () => {
+        const result = reader.result as string
+        const base64 = result.split(',')[1]
+        setAttachments(prev => [...prev, {
+          name: file.name,
+          mediaType: file.type || 'application/octet-stream',
+          base64,
+          previewUrl: file.type.startsWith('image/') ? result : '',
+        }])
+      }
+      reader.readAsDataURL(file)
+    })
+    e.target.value = ''
+  }
+  const removeAttachment = (index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index))
+  }
+
   const sendMessage = useCallback(async (text: string) => {
     const trimmed = text.trim()
     if (!trimmed || isStreaming) return
+    const outgoingAttachments = attachments
     setInput('')
+    setAttachments([])
 
-    setMessages(prev => [...prev, { role: 'user', lines: [trimmed], visibleLines: 1 }])
+    setMessages(prev => [...prev, { role: 'user', lines: [trimmed], visibleLines: 1, attachments: outgoingAttachments.map(a => ({ name: a.name, mediaType: a.mediaType, previewUrl: a.previewUrl })) }])
     setIsStreaming(true)
     setStatusWord(detectStatusWord(trimmed))
     abortRef.current = false
@@ -577,6 +645,9 @@ export default function ChatPage() {
           user_id: session?.user?.id ?? 'anonymous',
           conversation_id: currentConversationId,
           project_id: currentProjectId,
+          attachments: outgoingAttachments.length > 0
+            ? outgoingAttachments.map(a => ({ mediaType: a.mediaType, base64: a.base64 }))
+            : undefined,
         }),
       })
 
@@ -705,7 +776,7 @@ export default function ChatPage() {
     } finally {
       setIsStreaming(false)
     }
-  }, [isStreaming, session, currentConversationId, currentProjectId])
+  }, [isStreaming, session, currentConversationId, currentProjectId, attachments])
 
   const stopStreaming = useCallback(() => { abortRef.current = true; setIsStreaming(false) }, [])
 
@@ -748,6 +819,9 @@ export default function ChatPage() {
     isStreaming, surface, border, textPrimary, textMuted,
     darkMode: dm, textareaRef, placeholder: '',
     disclaimer: t('disclaimer'),
+    attachments, fileInputRef, onFileSelected: handleFileSelect,
+    onRemoveAttachment: removeAttachment,
+    onAttachClick: () => fileInputRef.current?.click(),
   }
 
   function greeting() {
@@ -969,6 +1043,19 @@ export default function ChatPage() {
                         {msg.role === 'user' ? (
                           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px', maxWidth: '72%' }}>
+                              {msg.attachments && msg.attachments.length > 0 && (
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', justifyContent: 'flex-end' }}>
+                                  {msg.attachments.map((att, ai) => (
+                                    att.previewUrl ? (
+                                      <img key={ai} src={att.previewUrl} alt={att.name} style={{ width: '96px', height: '96px', borderRadius: '12px', objectFit: 'cover', border: '1px solid rgba(255,255,255,0.1)' }} />
+                                    ) : (
+                                      <div key={ai} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', borderRadius: '10px', backgroundColor: '#0a1628', color: 'rgba(255,255,255,0.8)', fontSize: '13px', fontFamily: F }}>
+                                        {att.name}
+                                      </div>
+                                    )
+                                  ))}
+                                </div>
+                              )}
                               <div style={{ padding: '11px 16px', borderRadius: '16px 16px 3px 16px', backgroundColor: '#0a1628', fontSize: '16px', fontWeight: 300, lineHeight: '1.7', color: 'rgba(255,255,255,0.9)', fontFamily: F }}>
                                 {msg.lines[0]}
                               </div>
