@@ -108,8 +108,8 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
       <p style={{ margin: '-8px 0 20px', fontSize: '12px', color: '#999', fontFamily: F }}>All paid plans are coming soon. You're on the free beta — enjoy full access.</p>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
         {plans.map(plan => (
-          <div key={plan.name} style={{ border: `1.5px solid ${plan.current ? plan.color : '#e8e8e8'}`, borderRadius: '12px', padding: '18px', backgroundColor: plan.current ? '#f8f9ff' : '#fafafa', opacity: (plan as any).soon ? 0.75 : 1, position: 'relative' }}>
-            {(plan as any).soon && <div style={{ position: 'absolute', top: '12px', right: '12px', fontSize: '9px', fontWeight: 700, color: '#fff', backgroundColor: '#f59e0b', padding: '2px 8px', borderRadius: '4px', fontFamily: F }}>COMING SOON</div>}
+          <div key={plan.name} style={{ border: `1.5px solid ${plan.current ? plan.color : '#e8e8e8'}`, borderRadius: '12px', padding: '18px', backgroundColor: plan.current ? '#f8f9ff' : '#fafafa', position: 'relative', overflow: 'hidden' }}>
+            <div style={{ filter: (plan as any).soon ? 'blur(4px)' : 'none', pointerEvents: (plan as any).soon ? 'none' : 'auto' }}>
             {plan.current && <div style={{ position: 'absolute', top: '12px', right: '12px', fontSize: '9px', fontWeight: 700, color: '#fff', backgroundColor: plan.color, padding: '2px 8px', borderRadius: '4px', fontFamily: F }}>CURRENT</div>}
             <p style={{ margin: '0 0 4px', fontSize: '15px', fontWeight: 700, color: plan.color, fontFamily: F }}>{plan.name}</p>
             <p style={{ margin: '0 0 14px', fontSize: '22px', fontWeight: 700, color: '#0a0a0a', fontFamily: F }}>{plan.price}<span style={{ fontSize: '12px', fontWeight: 400, color: '#999' }}>{plan.period}</span></p>
@@ -124,6 +124,12 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
             <button disabled={(plan as any).soon || plan.current} style={{ width: '100%', marginTop: '16px', padding: '9px', borderRadius: '8px', border: 'none', backgroundColor: plan.current ? '#e8eeff' : (plan as any).soon ? '#f0f0f0' : plan.color, color: plan.current ? plan.color : (plan as any).soon ? '#aaa' : 'white', fontFamily: F, fontSize: '12px', fontWeight: 600, cursor: (plan as any).soon || plan.current ? 'not-allowed' : 'pointer' }}>
               {plan.current ? 'Current plan' : (plan as any).soon ? 'Coming soon' : `Upgrade to ${plan.name}`}
             </button>
+            </div>
+            {(plan as any).soon && (
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.25)', zIndex: 2 }}>
+                <span style={{ fontSize: '13px', fontWeight: 700, color: '#0a0a0a', backgroundColor: 'rgba(255,255,255,0.92)', padding: '6px 16px', borderRadius: '20px', fontFamily: F, boxShadow: '0 2px 10px rgba(0,0,0,0.15)', letterSpacing: '0.02em' }}>Coming Soon</span>
+              </div>
+            )}
           </div>
         ))}
       </div>

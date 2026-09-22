@@ -1334,7 +1334,7 @@ export default function ChatPage() {
                       {/* Actions */}
                       <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
                         {item.stlUrl && (
-                          <button title="View in 3D" onClick={() => { setCurrentStlUrl(item.stlUrl!); setViewerOpen(true); setLibraryOpen(false) }}
+                          <button title="View in 3D" onClick={() => { setCurrentStlUrl(item.stlUrl!); setCurrentCadUrls(item.cadUrls ?? null); setActiveModel((item.modelType as ModelType) || 'cube'); setViewerOpen(true); setLibraryOpen(false) }}
                             style={{ width: '28px', height: '28px', borderRadius: '6px', border: `1px solid ${border}`, backgroundColor: 'transparent', color: textMuted, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'color 0.15s' }}
                             onMouseEnter={e => { e.currentTarget.style.color = '#4a7fff' }}
                             onMouseLeave={e => { e.currentTarget.style.color = textMuted }}>
