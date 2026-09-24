@@ -15,6 +15,7 @@ import Sidebar, { SIDEBAR_EXPANDED, SIDEBAR_COLLAPSED, ThemePreference } from '@
 const F = "'Neue Montreal', 'Helvetica Neue', Helvetica, Arial, sans-serif"
 const CHAT_API = 'https://web-production-9f493.up.railway.app/chat'
 const CONVERSATIONS_API = 'https://web-production-9f493.up.railway.app/conversations'
+const AUTH_API = 'https://web-production-9f493.up.railway.app/auth/upsert-user'
 
 interface Conversation {
   id: string
@@ -430,6 +431,15 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (!session?.user?.id) return
+    fetch(AUTH_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: session.user.id,
+        email: session.user.email ?? '',
+        name: session.user.name ?? '',
+      }),
+    }).catch(() => {})
     fetch(`${CONVERSATIONS_API}/${session.user.id}`)
       .then(r => r.ok ? r.json() : [])
       .then((res: { conversations: Conversation[] } | Conversation[]) => {
