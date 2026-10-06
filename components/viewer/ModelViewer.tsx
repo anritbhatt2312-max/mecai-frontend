@@ -524,6 +524,7 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
   const [autoRotate, setAutoRotate] = useState(false)
   const [show2D, setShow2D]       = useState(false)
   const [drawingSvg, setDrawingSvg] = useState<string | null>(null)
+  const drawingPanelRef = useRef<HTMLDivElement>(null)
   const [drawingLoading, setDrawingLoading] = useState(false)
   const [zoomDelta, setZoomDelta] = useState(0)
   const [dots, setDots]           = useState('.')
@@ -650,6 +651,25 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
     else showToast('DXF export — coming soon')
   }, [cadUrls, modelType, downloadFile, showToast])
 
+  const handleExportDrawing = useCallback(() => {
+    let raw: string | null = drawingSvg
+    if (!raw) {
+      const el = drawingPanelRef.current?.querySelector('svg')
+      if (el) raw = new XMLSerializer().serializeToString(el)
+    }
+    if (!raw) { showToast('Open the 2D drawing first'); return }
+    const svg = /xmlns=/.test(raw)
+      ? raw
+      : raw.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"')
+    const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${(realSpecs?.type || MODEL_META[modelType]?.label || 'drawing').replace(/ /g, '_')}_drawing.svg`
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }, [drawingSvg, realSpecs, modelType, showToast])
+
   const meta = MODEL_META[modelType]
   const isEmpty = modelType === 'empty' && pendingModel === 'empty'
   const hasRealStl = Boolean(stlUrl)
@@ -696,6 +716,7 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
               <line x1="9" y1="21" x2="9" y2="9"/>
             </svg>
           </ToolBtn>
+          <ToolBtn label={show2D ? 'Download 2D drawing (SVG)' : 'Open 2D drawing first'} onClick={handleExportDrawing}><span style={{ fontSize: '9px', fontWeight: 700, lineHeight: 1 }}>SVG</span></ToolBtn>
           {/* #7 Stress & Strain Simulation */}
           <ToolBtn label={cadUrls?.step_url ? (heatmap && feaResults ? 'Back to normal view' : 'Run stress analysis') : 'Stress analysis — generate a component first'} active={heatmap && !!feaResults} onClick={() => {
             if (heatmap && feaResults) setHeatmap(false)
@@ -753,7 +774,7 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
           </div>
         )}
         {show2D && !hasRealStl && (modelType !== 'empty' || pendingModel !== 'empty') && (
-          <div style={{ position: 'absolute', inset: 0, zIndex: 6 }}>
+          <div ref={drawingPanelRef} style={{ position: 'absolute', inset: 0, zIndex: 6 }}>
             <Drawing2D
               modelType={pendingModel !== 'empty' ? pendingModel : modelType}
               shapeDims={shapeDims}
