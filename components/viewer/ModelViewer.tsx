@@ -567,7 +567,7 @@ export default function ModelViewer({ onClose, modelType = 'empty', pendingModel
     if (!cadUrls?.step_url || drawingLoading) return
     setDrawingLoading(true)
     try {
-      const res = await fetch('https://web-production-9f493.up.railway.app/fea/drawing', {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_DRAWING_API ?? 'https://web-production-9f493.up.railway.app'}/fea/drawing`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

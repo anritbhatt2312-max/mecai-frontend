@@ -13,7 +13,7 @@ import ModelViewer, { ModelType, ShapeDimensions } from '@/components/viewer/Mod
 import Sidebar, { SIDEBAR_EXPANDED, SIDEBAR_COLLAPSED, ThemePreference } from '@/components/sidebar/Sidebar'
 
 const F = "'Neue Montreal', 'Helvetica Neue', Helvetica, Arial, sans-serif"
-const CHAT_API = 'https://web-production-9f493.up.railway.app/chat'
+const CHAT_API = (process.env.NEXT_PUBLIC_CHAT_API ?? 'https://web-production-9f493.up.railway.app') + '/chat'
 const CONVERSATIONS_API = 'https://web-production-9f493.up.railway.app/conversations'
 const AUTH_API = 'https://web-production-9f493.up.railway.app/auth/upsert-user'
 
@@ -266,6 +266,51 @@ function SearchPanel({ open, query, onChange, onClose, chats, surface, border, t
   )
 }
 
+// Reduce an AI material sentence to a short name: first option, no parentheticals, no property clauses
+function cleanMaterial(raw: string): string {
+  let m = raw.split('\n')[0].replace(/[*`]/g, '').trim()
+  m = m.split(/\s+[—–-]\s+/)[0]
+  m = m.replace(/\s*\([^)]*\)?/g, '')
+  m = m.split(/\s+(?:or|for|with|yield|per|to)\s+/i)[0]
+  m = m.replace(/[\s,;:.]+$/, '').trim()
+  return m || 'Steel'
+}
+
+// Part type for the title / viewer panel. The user's own words win; the AI reply is only a fallback,
+// and bolts mentioned as mounting hardware ("for M8 bolts", "bolt holes") do not make the part a bolt.
+const PART_NAMES: [RegExp, string][] = [
+  [/\b(?:l[- ]?bracket|angle bracket|corner bracket|bracket)s?\b/, 'Bracket'],
+  [/\bhinges?\b/, 'Hinge'],
+  [/\bflange[sd]?\b/, 'Flange'],
+  [/\bcouplings?\b/, 'Coupling'],
+  [/\bhelical\b/, 'Helical Gear'],
+  [/\bspur gear\b/, 'Spur Gear'],
+  [/\bgears?\b/, 'Gear'],
+  [/\bpulleys?\b/, 'Pulley'],
+  [/\bsprockets?\b/, 'Sprocket'],
+  [/\bbearings?\b/, 'Bearing'],
+  [/\bshafts?\b/, 'Shaft'],
+  [/\bsprings?\b/, 'Spring'],
+  [/\bwashers?\b/, 'Washer'],
+  [/\bnuts?\b/, 'Nut'],
+  [/\bplates?\b/, 'Plate'],
+  [/\b(?:bolts?|screws?)\b/, 'Bolt'],
+  [/\bspheres?\b/, 'Sphere'],
+  [/\bcylinders?\b/, 'Cylinder'],
+  [/\b(?:rectangular box|rectangle|box)\b/, 'Rectangular Box'],
+  [/\bcubes?\b/, 'Cube'],
+]
+function guessPartName(reply: string, prompt: string): string {
+  const pick = (text: string): string | null => {
+    const t = text.toLowerCase()
+      .replace(/\b(?:for|with|using|and|m\d+)\s+(?:m\d+\s+)?(?:bolts?|screws?)\b/g, ' ')
+      .replace(/\b(?:bolt|screw)\s+(?:holes?|circle|pattern)\b/g, ' ')
+    for (const [re, name] of PART_NAMES) if (re.test(t)) return name
+    return null
+  }
+  return pick(prompt || '') ?? pick(reply || '') ?? 'Component'
+}
+
 export default function ChatPage() {
   const { data: session, status } = useSession()
   const [showTransition, setShowTransition] = useState(true)
@@ -498,16 +543,12 @@ export default function ChatPage() {
         const compDimsMatch = fullResponse.match(/(?:Nominal\s+dimension|dimensions?|size)[:\s]+([^\n,]+)/i) ||
                               fullResponse.match(/([\d.]+\s*mm\s*[x×]\s*[\d.]+\s*mm)/i)
         const tlName = fullResponse.toLowerCase()
-        let keywordName = 'Component'
-        if (tlName.includes('spur gear')) keywordName = 'Spur Gear'
-        else if (tlName.includes('helical')) keywordName = 'Helical Gear'
-        else if (tlName.includes('shaft')) keywordName = 'Shaft'
-        else if (tlName.includes('bearing')) keywordName = 'Bearing'
-        else if (tlName.includes('bolt') || tlName.includes('screw')) keywordName = 'Bolt'
-        else if (tlName.includes('sphere')) keywordName = 'Sphere'
-        else if (tlName.includes('cylinder')) keywordName = 'Cylinder'
-        else if (tlName.includes('rectangle') || tlName.includes('box')) keywordName = 'Rectangular Box'
-        else if (tlName.includes('cube')) keywordName = 'Cube'
+        const promptBefore = (() => {
+          const idx = rawMessages.lastIndexOf(lastStlMessage)
+          for (let i = idx - 1; i >= 0; i--) if (rawMessages[i].role === 'user') return rawMessages[i].content ?? ''
+          return ''
+        })()
+        let keywordName = guessPartName(fullResponse, promptBefore)
         let dimsValue = compDimsMatch ? (compDimsMatch[1] || compDimsMatch[0]).trim() : ''
         dimsValue = dimsValue.replace(/^[*#\-\s:]+/, '').trim()
         if (!/[0-9]/.test(dimsValue)) dimsValue = ''
@@ -519,7 +560,7 @@ export default function ChatPage() {
         setRealSpecs({
           type: (extractedName && !isGenericHeading(extractedName)) ? extractedName : keywordName,
           dimensions: dimsValue,
-          material: compMaterialMatch ? compMaterialMatch[0].trim().split('\n')[0].replace(/[*]/g,'').trim() : 'Steel',
+          material: compMaterialMatch ? cleanMaterial(compMaterialMatch[0]) : 'Steel',
         })
       } else {
         setCurrentStlUrl(null)
@@ -601,7 +642,12 @@ export default function ChatPage() {
   }
 
   const GENERIC_HEADINGS = ['design parameters', 'design specification', 'design specifications', 'specifications', 'specification', 'overview', 'geometry', 'calculated geometry', 'calculated dimensions', 'key calculated dimensions', 'material recommendation', 'materials', 'parameters']
-  const isGenericHeading = (name: string) => GENERIC_HEADINGS.includes(name.trim().toLowerCase())
+  const isGenericHeading = (name: string) => {
+    const n = name.trim().toLowerCase()
+    if (GENERIC_HEADINGS.includes(n)) return true
+    if (n.split(/\s+/).length > 5) return true // a sentence, not a part name
+    return /^(union|unite|combine|fuse|merge|create|generate|make|build|use|add|apply|cut|extrude|subtract|draw|sketch|start|begin|first|then|finally|step)\b/.test(n)
+  }
 
   const MAX_ATTACHMENT_MB = 10
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -702,16 +748,7 @@ export default function ChatPage() {
         const compDimsMatch = fullResponse.match(/(?:Nominal\s+dimension|dimensions?|size)[:\s]+([^\n,]+)/i) ||
                               fullResponse.match(/([\d.]+\s*mm\s*[x×]\s*[\d.]+\s*mm)/i)
         const tlName = fullResponse.toLowerCase()
-        let keywordName = 'Component'
-        if (tlName.includes('spur gear')) keywordName = 'Spur Gear'
-        else if (tlName.includes('helical')) keywordName = 'Helical Gear'
-        else if (tlName.includes('shaft')) keywordName = 'Shaft'
-        else if (tlName.includes('bearing')) keywordName = 'Bearing'
-        else if (tlName.includes('bolt') || tlName.includes('screw')) keywordName = 'Bolt'
-        else if (tlName.includes('sphere')) keywordName = 'Sphere'
-        else if (tlName.includes('cylinder')) keywordName = 'Cylinder'
-        else if (tlName.includes('rectangle') || tlName.includes('box')) keywordName = 'Rectangular Box'
-        else if (tlName.includes('cube')) keywordName = 'Cube'
+        let keywordName = guessPartName(fullResponse, trimmed)
         let dimsValue = compDimsMatch ? (compDimsMatch[1] || compDimsMatch[0]).trim() : ''
         dimsValue = dimsValue.replace(/^[*#\-\s:]+/, '').trim()
         if (!/[0-9]/.test(dimsValue)) dimsValue = ''
@@ -719,7 +756,7 @@ export default function ChatPage() {
         setRealSpecs({
           type: (extractedName && !isGenericHeading(extractedName)) ? extractedName : keywordName,
           dimensions: dimsValue,
-          material: compMaterialMatch ? compMaterialMatch[0].trim().split('\n')[0].replace(/[*]/g,'').trim() : 'Steel',
+          material: compMaterialMatch ? cleanMaterial(compMaterialMatch[0]) : 'Steel',
         })
         setTimeout(() => {
           setIsGenerating(false)
